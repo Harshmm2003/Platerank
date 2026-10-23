@@ -407,6 +407,29 @@ def reddit_posted(slug: str, body: PostedIn):
     return pipeline.farm_view(slug)
 
 
+@app.get("/api/restaurants/{slug}/creators")
+def creators_view(slug: str):
+    _profile_or_404(slug)
+    return pipeline.creators_view(slug)
+
+
+@app.post("/api/restaurants/{slug}/creators/find")
+def creators_find(slug: str):
+    """One Claude + web search call; every creator's name + link checked in the evidence ledger."""
+    _profile_or_404(slug)
+    return pipeline.creators_find(slug)
+
+
+class CreatorsIn(BaseModel):
+    handles: list[str]
+
+
+@app.post("/api/restaurants/{slug}/creators/save")
+def creators_save(slug: str, body: CreatorsIn):
+    _profile_or_404(slug)
+    return pipeline.creators_save(slug, body.handles)
+
+
 # ------------------------------------------------------------------ frontend
 if (WEB / "assets").exists():
     app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")

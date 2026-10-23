@@ -57,10 +57,111 @@ def score_creator(c: dict, lost_categories: list[str], local: set[str] | None = 
                    f"{c.get('platform')} citation value {citation}, local to {c.get('local_to')}, "
                    f"{c.get('followers')} followers (micro tier an independent can actually afford)"}
 
+def score_with_unknowns(c: dict, lost_categories: list[str], local: set[str] | None = None) -> dict:
+    """score_creator UNCHANGED, but an unknown follower count / engagement rate is treated as unknown, not zero:
+    it is scored at the worst and the best possible value and shown as a range (sorted by the low end)."""
+    unknown = [k for k in ("followers", "engagement_rate") if c.get(k) is None]
+    if not unknown:
+        return {**score_creator(c, lost_categories, local), "score_low": None, "score_high": None, "unknown": []}
+    low = score_creator({**c, **{k: 0 for k in unknown}}, lost_categories, local)
+    high = score_creator({**c, **({"followers": 50_000} if "followers" in unknown else {}),
+                          **({"engagement_rate": 0.08} if "engagement_rate" in unknown else {})}, lost_categories, local)
+    return {**low, **{k: None for k in unknown}, "score_low": low["relevance_score"], "score_high": high["relevance_score"], "unknown": unknown,
+            "why": low["why"].replace("None followers", "followers unknown").replace("0 followers", "followers unknown") +
+                   f" - {' and '.join(u.replace('_', ' ') for u in unknown)} unknown, so the score is a range"}
+
+
 def match_creators(creators: list[dict], lost_categories: list[str], top_n: int = 5,
                    local: set[str] | None = None) -> list[dict]:
-    scored = [score_creator(c, lost_categories, local) for c in creators]
+    scored = [score_with_unknowns(c, lost_categories, local) for c in creators]
     return sorted(scored, key=lambda x: -x["relevance_score"])[:top_n]
+
+
+CATEGORIES = ["generic", "signature", "cheap", "value", "lunch", "date-night", "premium", "group", "dietary", "tourist",
+              "late-night", "happy-hour", "drinks", "events"]
+NICHE_SYNONYMS = {"budget": "cheap", "date night": "date-night", "happy hour": "happy-hour", "cheap eats": "cheap", "affordable": "value", "healthy": "dietary", "vegan": "dietary",
+                  "vegetarian": "dietary", "gluten-free": "dietary", "date": "date-night", "romantic": "date-night", "fine dining": "premium",
+                  "luxury": "premium", "brunch": "lunch", "family": "tourist", "travel": "tourist", "cocktails": "drinks", "bars": "drinks",
+                  "nightlife": "late-night", "party": "events", "catering": "events", "restaurant reviews": "generic", "food reviews": "generic"}
+
+
+def map_niches(niches) -> list[str]:
+    out = []
+    for n in niches or []:
+        n = str(n).strip().lower()
+        m = n if n in CATEGORIES else NICHE_SYNONYMS.get(n)
+        if m and m not in out:
+            out.append(m)
+    return out or ["generic"]
+
+
+FIND_PROMPT = (
+    "Search the web for real food content creators who cover {cuisine} food in or near {where}: YouTube channels first, then "
+    "TikTok, Instagram and local food blogs. Reply with ONLY a JSON array (max 10) of objects: name, handle (with @ for social "
+    "accounts), platform (YouTube, TikTok, Instagram or Blog), url (their channel/profile/blog page - required), local_to (the "
+    "city or area they cover), niches (short words like budget, date night, brunch, cocktails, healthy), followers (the number "
+    "shown on a page you saw, or null - never estimate), followers_source_url (the page showing it, or null), photo_url (their "
+    "profile image URL if you saw it, or null), best_performing_format (a few words). Only creators you actually found.")
+
+
+def find_creators(slug: str, profile: dict, lost_categories: list[str]) -> dict:
+    """One Claude + web search call. Name + profile URL verified in the evidence ledger (rows without a URL dropped);
+    follower count and photo only kept when verified on a page/citation, else unknown. Nothing is estimated."""
+    import re, time
+    from . import evidence, llm
+    where = ", ".join(x for x in (profile.get("neighbourhood") or profile.get("area"), profile.get("city"), profile.get("state")) if x)
+    r = llm.claude_call(FIND_PROMPT.format(cuisine=profile["cuisine"], where=where),
+                        tools=[llm.web_search_tool(max_uses=5, location=llm.location_for(profile))], max_tokens=6000)
+    try:
+        raw = llm.json_from(r.text or "[]")
+    except ValueError:
+        raw = []
+    raw = [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
+    usable = [x for x in raw if str(x.get("url", "")).startswith("http") and (x.get("name") or x.get("handle"))]
+    rows = []
+    for x in usable:
+        who = str(x.get("name") or x.get("handle"))
+        items = [{"kind": "name", "text": who, "source_url": x["url"], "subject": f"creator ({x.get('platform') or 'web'})"}]
+        if x.get("followers") not in (None, ""):
+            items.append({"kind": "followers", "text": str(x["followers"]), "source_url": x.get("followers_source_url") or x["url"],
+                          "subject": f"{who}: followers"})
+        recs = evidence.record_and_verify(slug, items, citations=r.citations)
+        if recs[0]["status"] == evidence.REJECTED:
+            continue
+        fol = recs[1] if len(recs) > 1 else None
+        followers = evidence.parse_count(x["followers"]) if fol and fol["status"] == evidence.VERIFIED else None
+        photo = None
+        if x.get("photo_url") and recs[0]["status"] == evidence.VERIFIED:
+            page, _ = evidence.fetch_page(x["url"])  # the photo counts only if the profile page itself shows that image
+            if page and x["photo_url"] in page["html"]:
+                photo = x["photo_url"]
+                evidence.record_direct(slug, [{"kind": "photo", "text": photo, "source_url": x["url"], "subject": f"{who}: photo"}])
+        c = {"handle": x.get("handle") or who, "name": who, "platform": x.get("platform") if x.get("platform") in PLATFORM_CITATION_VALUE else "Blog",
+             "url": x["url"], "followers": followers, "engagement_rate": None, "local_to": x.get("local_to") or "",
+             "niches": map_niches(x.get("niches")), "best_performing_format": x.get("best_performing_format") or "",
+             "photo_url": photo, "verified": recs[0]["status"] == evidence.VERIFIED, "source_url": x["url"],
+             "evidence": evidence.badge(recs[0]), "followers_evidence": evidence.badge(fol) if fol else None}
+        rows.append(c)
+    data = {"at": time.strftime("%Y-%m-%d %H:%M"), "creators": rows, "found": len(raw), "dropped_no_url": len(raw) - len(usable),
+            "rejected": len(usable) - len(rows), "cost_usd": round(r.cost_usd, 4)}
+    p = evidence.ledger_path(slug).parent / "creators_found.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+    return data
+
+
+def save_live(slug: str, restaurant: str, picked: list[dict]) -> list[dict]:
+    """Ticked creators -> data/live/creators_live.json (same record format as the demo file + verified/source_url/found_for)."""
+    keep = ("handle", "name", "platform", "followers", "engagement_rate", "local_to", "niches", "best_performing_format",
+            "verified", "source_url", "photo_url")
+    current = load_live_creators()
+    by_handle = {(c.get("handle"), c.get("found_for")): c for c in current}
+    for c in picked:
+        by_handle[(c["handle"], restaurant)] = {**{k: c.get(k) for k in keep}, "found_for": restaurant}
+    out = list(by_handle.values())
+    LIVE.parent.mkdir(parents=True, exist_ok=True)
+    LIVE.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
+    return out
 
 def content_briefs(creator: dict, profile: dict, lost_categories: list[str]) -> list[dict]:
     """Content that creates an INDEXABLE asset, not just a post that vanishes.

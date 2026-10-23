@@ -77,10 +77,27 @@ def _times(s: str) -> set[str]:
     return out
 
 
+def parse_count(s) -> int | None:
+    """'84.2K' -> 84200, '1.3M' -> 1300000, '12,345 subscribers' -> 12345; None if there is no number."""
+    m = re.search(r"(\d+(?:[.,]\d+)*)\s*([kKmM])?", str(s or ""))
+    if not m:
+        return None
+    n = m.group(1)
+    n = float(n.replace(",", "")) if m.group(2) is None or "," in n and "." not in n else float(n.replace(",", "."))
+    return int(round(n * {"k": 1e3, "m": 1e6}.get((m.group(2) or "").lower(), 1)))
+
+
 def matches(kind: str, text: str, page: str) -> bool:
     """Is `text` on the page? `page` must already be normalise()d."""
     t = normalise(str(text))
     if not t:
+        return False
+    if kind == "followers":  # 84.2K / 1.3M / 12345 - within 2% (pages round)
+        v = parse_count(t) or 0
+        for n, suf in re.findall(r"(?<![\d.])(\d+(?:\.\d+)?)\s*([km])?(?![a-z\d])", page):
+            x = float(n) * {"k": 1e3, "m": 1e6}.get(suf, 1)
+            if v and abs(x - v) <= 0.02 * v:
+                return True
         return False
     if kind in ("rating", "review_count") or re.fullmatch(r"\d+(?:\.\d+)?", t):
         return _num_in(t, page)

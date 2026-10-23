@@ -676,6 +676,57 @@ check("reddit: sample can't search", c.post("/api/restaurants/example/reddit/fin
 llm.claude_call = real_call
 del os.environ["ANTHROPIC_API_KEY"]
 
+# ---- social media: real creators (fake Claude + fake pages), verified only, nothing estimated
+FAKE_PAGES.update({
+    "https://www.youtube.com/@pbfoodguy": FakePage('<html><head><title>PB Food Guy - YouTube</title></head><body><img src="https://yt3.example/pbfg.jpg">'
+        "<h1>PB Food Guy</h1><p>84.2K subscribers</p><p>Cheap eats and date night spots in Pacific Beach.</p>" + FILLER + "</body></html>"),
+    "https://www.tiktok.com/@realeatssd": FakePage("blocked", status=403),
+    "https://www.youtube.com/@faker": FakePage("<html><body><h1>Cooking with Dave</h1>" + FILLER + "</body></html>"),
+    "https://sdfoodblog.example/": FakePage("<html><body><h1>SD Food Blog</h1><p>Reviews across San Diego.</p>" + FILLER + "</body></html>"),
+})
+CREATORS = [
+    {"name": "PB Food Guy", "handle": "@pbfoodguy", "platform": "YouTube", "url": "https://www.youtube.com/@pbfoodguy", "local_to": "Harbor Point",
+     "niches": ["budget", "date night"], "followers": "84,231", "followers_source_url": "https://www.youtube.com/@pbfoodguy",
+     "photo_url": "https://yt3.example/pbfg.jpg", "best_performing_format": "ranked cheap eats"},
+    {"name": "Real Eats SD", "handle": "@realeatssd", "platform": "TikTok", "url": "https://www.tiktok.com/@realeatssd", "followers": 12000, "niches": ["healthy"]},
+    {"name": "Famous Fake Foodie", "handle": "@faker", "platform": "YouTube", "url": "https://www.youtube.com/@faker", "followers": 2000000},
+    {"name": "No Link Larry", "handle": "@nolink", "platform": "Instagram"},
+    {"name": "SD Food Blog", "platform": "Blog", "url": "https://sdfoodblog.example/", "followers": None, "niches": ["restaurant reviews", "happy hour"],
+     "photo_url": "https://elsewhere.example/x.png"}]
+llm.claude_call = lambda *a, **k: llm.ClaudeResult(text=json.dumps(CREATORS), model="fake")
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+cv = c.post("/api/restaurants/recheck_cafe/creators/find").json()
+by = {x["name"]: x for x in cv["creators"]}
+check("creators: no-link dropped, not-on-page rejected, rest kept", set(by) == {"PB Food Guy", "Real Eats SD", "SD Food Blog"}
+      and cv["dropped_no_url"] == 1 and cv["rejected"] == 1, (list(by), cv["dropped_no_url"], cv["rejected"]))
+check("creators: verified badge per row", by["PB Food Guy"]["verified"] and not by["Real Eats SD"]["verified"] and by["PB Food Guy"]["evidence"]["status"] == "verified")
+check("creators: followers only when verified on the page (84,231 vs '84.2K')", by["PB Food Guy"]["followers"] == 84231
+      and by["Real Eats SD"]["followers"] is None and by["SD Food Blog"]["followers"] is None, [(n, x["followers"]) for n, x in by.items()])
+check("creators: photo only if the profile page shows it", by["PB Food Guy"]["photo_url"] == "https://yt3.example/pbfg.jpg" and by["SD Food Blog"]["photo_url"] is None)
+check("creators: niches mapped to our question types", by["PB Food Guy"]["niches"] == ["cheap", "date-night"] and by["SD Food Blog"]["niches"] == ["generic", "happy-hour"],
+      [x["niches"] for x in by.values()])
+check("creators: unknown followers -> score range, not zero", by["SD Food Blog"]["score_low"] < by["SD Food Blog"]["score_high"]
+      and by["SD Food Blog"]["unknown"] == ["followers", "engagement_rate"] and by["PB Food Guy"]["unknown"] == ["engagement_rate"],
+      (by["SD Food Blog"]["unknown"], by["PB Food Guy"]["unknown"]))
+known = {"platform": "YouTube", "niches": ["cheap"], "local_to": "x", "followers": 20000, "engagement_rate": 0.05}
+check("creators: score_creator unchanged when everything is known", creators_mod.score_with_unknowns(known, ["cheap"])["relevance_score"]
+      == creators_mod.score_creator(known, ["cheap"])["relevance_score"])
+check("creators: brief file says 'unknown', never a guessed number", "Followers: unknown" in by["SD Food Blog"]["brief_text"] and "Video idea:" in by["SD Food Blog"]["brief_text"])
+check("creators: unverified can't be saved", c.post("/api/restaurants/recheck_cafe/creators/save", json={"handles": ["@realeatssd"]}).status_code == 400)
+sv = c.post("/api/restaurants/recheck_cafe/creators/save", json={"handles": ["@pbfoodguy"]}).json()
+live = json.loads(creators_mod.LIVE.read_text(encoding="utf-8"))
+check("creators: ticked creator saved with verified + source_url, no budget field", live[-1]["handle"] == "@pbfoodguy" and live[-1]["verified"] is True
+      and live[-1]["source_url"] == "https://www.youtube.com/@pbfoodguy" and live[-1]["found_for"] == "Recheck Cafe"
+      and not any("budget" in k for k in live[-1]) and next(x for x in sv["creators"] if x["handle"] == "@pbfoodguy")["saved"], live[-1])
+okey = by["PB Food Guy"]["outreach_key"]
+c.post("/api/restaurants/recheck_cafe/approve", json={"key": okey, "text": by["PB Food Guy"]["outreach"]})
+rr = c.get("/api/restaurants/recheck_cafe/results").json()
+check("creators: approved message -> 'Open in email'", rr["mailto"].get(okey, "").startswith("mailto:?subject=Collaboration%20with%20Recheck%20Cafe"), list(rr["mailto"]))
+check("creators: saved creator with unknown engagement scores without crashing", any(x["handle"] == "@pbfoodguy" for x in rr["make"]["creators"]))
+check("creators: sample can't search", c.post("/api/restaurants/example/creators/find").status_code == 400)
+llm.claude_call = real_call
+del os.environ["ANTHROPIC_API_KEY"]
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")

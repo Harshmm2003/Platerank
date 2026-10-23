@@ -21,7 +21,8 @@ from .scrape import audit_website, diagnose
 from .sources_audit import audit_sources, prioritized_gaps, load_demo_sources, load_sources, save_sources
 from .reviews_vfm import (load_demo as load_reviews_demo, load_reviews, analyse_restaurant, area_benchmark,
                           benchmark_label, price_scenario, food_words)
-from .creators import load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places
+from .creators import (load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places,
+                       score_with_unknowns)
 from .content_gen import faq_page, outreach_email
 from . import content_gen
 from .store import answer_runs as store_answer_runs
@@ -829,6 +830,68 @@ def farm_find(slug: str) -> dict:
         raise ValueError("Reddit search is for your own restaurant - the sample is fictional.")
     reddit.find(slug, get_profile(slug))
     return farm_view(slug)
+
+
+# ------------------------------------------------------------------ social media: real creators (verified only)
+def _lost_from_last_run(slug: str) -> list[str]:
+    last = _read(state_dir(slug) / "last_run.json", None)
+    if not last:
+        return []
+    rates = _cat_rates([r for r in last["rows"] if r["status"] != FAILED])
+    return [c for c, v in rates.items() if v["rate"] < 0.34]
+
+
+def _brief_text(c: dict, profile: dict, brief: dict, scored: dict) -> str:
+    score = (f"{scored['score_low']}-{scored['score_high']} (range: {', '.join(scored['unknown'])} unknown)"
+             if scored.get("unknown") else str(scored["relevance_score"]))
+    lines = [f"Creator strategy & brief - {profile['name']} x {c['name']} ({c['platform']})", "",
+             f"Profile: {c['url']}", f"Followers: {c['followers'] if c.get('followers') is not None else 'unknown'}",
+             f"Local to: {c.get('local_to') or 'unknown'}   Niches: {', '.join(c.get('niches') or [])}",
+             f"Match score: {score}", f"Why: {scored['why']}", "",
+             f"Video idea: {brief['concept_title']}", f"Target question type: {brief['target_category']}",
+             f"Hook: {brief['hook']}", f"Format: {brief['format']}", "", "Must include (so AI assistants can cite it):"]
+    lines += [f"- {m}" for m in brief["must_include_for_ai_citation"]] + ["", f"Call to action: {brief['cta']}", "",
+              "Facts about the restaurant come only from its saved profile. Nothing here is sent automatically."]
+    return "\n".join(lines)
+
+
+def creators_view(slug: str) -> dict:
+    profile = get_profile(slug)
+    found = _read(state_dir(slug) / "creators_found.json", None) or {}
+    lost = _lost_from_last_run(slug)
+    local = local_places(profile)
+    saved = {c.get("handle") for c in load_live_creators() if c.get("found_for") == profile["name"]}
+    rows = []
+    for c in found.get("creators", []):
+        scored = score_with_unknowns(c, lost, local)
+        brief = content_briefs(c, profile, lost)[0]
+        rows.append({**c, "relevance_score": scored["relevance_score"], "score_low": scored["score_low"], "score_high": scored["score_high"],
+                     "unknown": scored["unknown"], "why": scored["why"], "brief": brief,
+                     "brief_text": _brief_text(c, profile, brief, scored), "outreach": outreach_draft(c, profile, brief),
+                     "outreach_key": "outreach_" + str(c["handle"]).lstrip("@"), "saved": c["handle"] in saved})
+    rows.sort(key=lambda x: (not x["verified"], -x["relevance_score"]))
+    return {"at": found.get("at"), "creators": rows, "found": found.get("found", 0), "dropped_no_url": found.get("dropped_no_url", 0),
+            "rejected": found.get("rejected", 0), "lost_categories": lost,
+            "can_search": slug != EXAMPLE_SLUG and llm.has_key()}
+
+
+def creators_find(slug: str) -> dict:
+    from .creators import find_creators
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("Creator search is for your own restaurant - the sample uses SAMPLE creator profiles.")
+    find_creators(slug, get_profile(slug), _lost_from_last_run(slug))
+    return creators_view(slug)
+
+
+def creators_save(slug: str, handles: list[str]) -> dict:
+    from .creators import save_live
+    profile = get_profile(slug)
+    found = (_read(state_dir(slug) / "creators_found.json", None) or {}).get("creators", [])
+    picked = [c for c in found if c["handle"] in handles]
+    if any(not c["verified"] for c in picked):
+        raise ValueError("Only verified creators can be saved - open the link of an unchecked one first.")
+    save_live(slug, profile["name"], picked)
+    return creators_view(slug)
 
 
 def results(slug: str) -> dict | None:

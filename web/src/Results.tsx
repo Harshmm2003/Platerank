@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AiQuote, api, ApiError, Evidence, Farm, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
+import { AiQuote, api, ApiError, CreatorsView, Evidence, Farm, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
 import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
@@ -10,6 +10,7 @@ const TABS = [
   ["make", "4", "Make the changes"],
   ["improve", "5", "Did it improve?"],
   ["farm", "6", "Data farming"],
+  ["social", "7", "Social media"],
 ] as const;
 
 export default function Results({ slug, tab }: { slug: string; tab: string }) {
@@ -50,7 +51,7 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
         tab === "why" ? <Why r={r} reload={load} /> :
         tab === "change" ? <Change r={r} reload={load} /> :
         tab === "make" ? <Make r={r} reload={load} /> :
-        tab === "improve" ? <Improve r={r} /> : tab === "farm" ? <FarmTab r={r} reload={load} /> : <Rank r={r} />}
+        tab === "improve" ? <Improve r={r} /> : tab === "farm" ? <FarmTab r={r} reload={load} /> : tab === "social" ? <SocialTab r={r} reload={load} /> : <Rank r={r} />}
       <SourcesPanel slug={slug} />
     </div>
   );
@@ -87,7 +88,7 @@ function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () =>
       </div>
       <TabNav slug={r.slug} tab={active} reminders={activeReminders(r)} />
       {active === "make" ? <Make r={r} reload={reload} /> : active === "change" ? <PeopleSaySection slug={r.slug} /> :
-        active === "farm" ? <FarmTab r={r} reload={reload} /> : (
+        active === "farm" ? <FarmTab r={r} reload={reload} /> : active === "social" ? <SocialTab r={r} reload={reload} /> : (
         <Card>
           <p className="text-stone-700">Run a check first - this answer comes from asking AI assistants the questions your customers ask.</p>
           <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button></div>
@@ -902,6 +903,93 @@ function FarmTab({ r, reload }: { r: R; reload: () => void }) {
         </div>
       ) : d.at && <Card><p className="text-sm text-stone-500">No verified threads or open subreddits to draft for yet. Try again later - threads come and go.</p></Card>}
       <p className="text-xs text-stone-400">{d.post_note} PlateRank never posts by itself.</p>
+    </div>
+    </HK.Provider>
+  );
+}
+
+const initials = (n: string) => n.replace(/^@/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
+
+/** Social media: REAL creators found by web search, each checked in the evidence ledger. Nothing estimated. */
+function SocialTab({ r, reload }: { r: R; reload: () => void }) {
+  const [d, setD] = useState<CreatorsView | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [ticked, setTicked] = useState<Record<string, boolean>>({});
+  const load = useCallback(() => api.get<CreatorsView>(`/api/restaurants/${r.slug}/creators`).then(setD).catch((e) => setError(e.message)), [r.slug]);
+  useEffect(() => { load(); }, [load]);
+  async function find() {
+    if (d?.at && !window.confirm("Search for creators again? This replaces the list (saved creators stay saved).")) return;
+    setBusy("find"); setError(null);
+    try { setD(await api.post<CreatorsView>(`/api/restaurants/${r.slug}/creators/find`)); } catch (e) { setError((e as Error).message); }
+    setBusy(null);
+  }
+  async function save() {
+    setBusy("save"); setError(null);
+    try { setD(await api.post<CreatorsView>(`/api/restaurants/${r.slug}/creators/save`, { handles: Object.keys(ticked).filter((k) => ticked[k]) })); setTicked({}); }
+    catch (e) { setError((e as Error).message); }
+    setBusy(null);
+  }
+  const hk = r.make?.housekeeping;
+  if (!d) return <ErrorNote error={error} />;
+  const nTicked = Object.values(ticked).filter(Boolean).length;
+  return (
+    <HK.Provider value={hk ? { reminders: hk.reminders, showHidden: false, now: null, pdf_keys: [] } : null}>
+    <div className="space-y-5">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Local food creators</h3>
+            <p className="text-sm text-stone-500">Real creators who cover your cuisine and area - YouTube first (AI assistants read and cite it), then TikTok, Instagram and blogs.
+              Follower counts appear only when we could check them on a page; otherwise “unknown”.</p>
+          </div>
+          <Button small busy={busy === "find"} disabled={!d.can_search} title={d.can_search ? "" : "Needs a Claude key in .env"} onClick={find}>
+            {d.at ? "Search again" : "Find creators"}</Button>
+        </div>
+        {busy === "find" && <SlowBar label="Claude is searching for local food creators, then we check each profile link… (20–60 seconds)" />}
+        <ErrorNote error={error} />
+        {d.at && <p className="mt-2 text-xs text-stone-500">Searched {d.at}: {d.creators.filter((c) => c.verified).length} verified ·
+          {" "}{d.creators.filter((c) => !c.verified).length} couldn't be checked · {d.rejected} rejected · {d.dropped_no_url} dropped (no profile link).
+          {d.lost_categories.length ? ` Matched against the question types you're losing: ${d.lost_categories.join(", ")}.` : " Run a check to match them against the question types you're losing."}</p>}
+      </Card>
+      {d.creators.length > 0 && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead><tr className="text-left text-xs text-stone-500"><th></th><th className="py-1">Creator</th><th>Platform</th><th>Followers</th><th>Local to</th><th>Niches</th><th>Match</th></tr></thead>
+              <tbody>{d.creators.map((c) => (
+                <tr key={c.handle} className={cx("border-t border-stone-100 align-top", !c.verified && "opacity-60")}>
+                  <td className="py-2 pr-2"><input type="checkbox" className="h-4 w-4 accent-brand-600" disabled={!c.verified || c.saved}
+                    checked={c.saved || !!ticked[c.handle]} onChange={(e) => setTicked({ ...ticked, [c.handle]: e.target.checked })}
+                    title={c.verified ? (c.saved ? "Saved" : "Tick to save") : "Not checked - open the link first"} /></td>
+                  <td className="py-2 pr-2"><div className="flex items-center gap-2">
+                    {c.photo_url ? <img src={c.photo_url} alt="" className="h-8 w-8 rounded-full object-cover" />
+                      : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-200 text-xs font-semibold text-stone-600">{initials(c.name)}</span>}
+                    <div><a className="font-medium text-sky-700 hover:underline" href={c.url} target="_blank" rel="noreferrer">{c.name}</a>
+                      <div className="text-xs text-stone-500">{c.handle !== c.name ? c.handle : ""}</div><EvidenceBadge ev={c.evidence} /></div></div></td>
+                  <td className="py-2 pr-2">{c.platform}</td>
+                  <td className="py-2 pr-2">{c.followers != null ? <>{c.followers.toLocaleString()} <EvidenceBadge ev={c.followers_evidence} /></> : <span className="text-stone-400">unknown</span>}</td>
+                  <td className="py-2 pr-2">{c.local_to || <span className="text-stone-400">unknown</span>}</td>
+                  <td className="py-2 pr-2 text-xs">{c.niches.join(", ")}</td>
+                  <td className="py-2 font-semibold" title={c.why}>{c.score_low != null ? `${c.score_low}-${c.score_high}` : c.relevance_score}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <Button small busy={busy === "save"} disabled={!nTicked} onClick={save}>Save ticked creators ({nTicked})</Button>
+            <span className="text-xs text-stone-500">Saved to data/live/creators_live.json with their verified status and link. A score range means followers or engagement are unknown.</span>
+          </div>
+        </Card>
+      )}
+      {d.creators.filter((c) => c.verified).map((c) => (
+        <More key={c.handle} label={`${c.name}: strategy, brief and message`}>
+          <div className="space-y-2">
+            <p className="text-sm"><b>Video idea:</b> “{c.brief.concept_title}” — {c.brief.hook}</p>
+            <Button small kind="secondary" onClick={() => download(`${c.handle.replace(/^@/, "")}-strategy-and-brief.txt`, c.brief_text)}>⬇ Strategy & brief</Button>
+            <Draft r={r} k={c.outreach_key} title={`Message to ${c.name}`} kind="text" text={c.outreach} reload={() => { reload(); load(); }} />
+          </div>
+        </More>
+      ))}
     </div>
     </HK.Provider>
   );

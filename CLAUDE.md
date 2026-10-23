@@ -33,11 +33,12 @@ Setup -> Discovery -> Analysis -> 3 Action tracks (Fix Pack / Creators / Value-f
 | `scrape.py` | Analysis | Website audit (schema, PDF menus via the Menu link, FAQ, dietary tags), menu reading from photo/PDF/link with Claude (Gemini fallback) |
 | `sources_audit.py` | Analysis | Listings/mentions per restaurant -> prioritized gaps, each routed to `standard` / `creator` / `vfm` |
 | `reviews_vfm.py` | Analysis + Action C | Aspect sentiment over REAL review text, VfM index, area price benchmark from competitor menus, price position scenarios |
-| `creators.py` | Action B | Creator scoring (niche fit, locality, engagement, platform citation value, tier), content briefs, outreach drafts |
+| `creators.py` | Action B | Creator scoring (niche fit, locality, engagement, platform citation value, tier), content briefs, outreach drafts; `find_creators` = real creators via Claude web search, checked in the evidence ledger |
 | `content_gen.py` | Action A | FAQ page, schema.org markup, outreach email — facts only, unknowns become `[OWNER TO CONFIRM: ...]` |
 | `store.py` | Setup + Measurement | Restaurant profiles in `data/live/<slug>/`, SQLite `data/runs.db` (runs + every answer row) |
 | `llm.py` | all | The ONE place Claude is called: models, web search / web fetch tools, cost per call, plain-English errors |
 | `evidence.py` | all | Evidence ledger: every web-sourced fact/quote is re-fetched from its cited page and marked verified / unverified / rejected |
+| `reddit.py` | Action (Data farming) | Reddit agent: verified subreddits + rules + live threads, owner-voiced reply/post drafts; the owner posts (never PlateRank) |
 | `places.py` | Setup | OpenStreetMap restaurant search (dropdown), place details, radius search for competitors; Claude web facts (price level, rating) with sources |
 | `pipeline.py` | all | The pipeline as functions for the web app: run Discovery, build the results bundle per owner question, approvals, reviews/listings saving |
 | `api.py` | UI backend | FastAPI routes over `pipeline`/`places`; plain-English errors; serves `web/dist` |

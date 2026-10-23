@@ -167,3 +167,10 @@ export type Farm = { at?: string; note: string; post_note: string; can_search: b
   counts?: Record<string, number>; drafts?: RedditDraft[]; posted?: Record<string, { url: string; at: string }>;
   links: Record<string, { href: string; copy: string; kind: "post" | "reply" }>;
   cited: { status: string; note: string } | null };
+
+export type RealCreator = { handle: string; name: string; platform: string; url: string; followers: number | null; local_to: string;
+  niches: string[]; best_performing_format: string; photo_url: string | null; verified: boolean; evidence: Evidence;
+  followers_evidence: Evidence | null; relevance_score: number; score_low: number | null; score_high: number | null; unknown: string[];
+  why: string; brief: { concept_title: string; hook: string }; brief_text: string; outreach: string; outreach_key: string; saved: boolean };
+export type CreatorsView = { at: string | null; creators: RealCreator[]; found: number; dropped_no_url: number; rejected: number;
+  lost_categories: string[]; can_search: boolean };
