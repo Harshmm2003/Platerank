@@ -1,7 +1,7 @@
 {
- "name": "Cafe Athena",
+ "name": "Café Athena",
  "website": "https://cafeathena.com/",
- "cuisine": "Greek, Mediterranean",
+ "cuisine": "Greek",
  "cuisine_alternates": [
   "Mediterranean"
  ],
@@ -14,7 +14,7 @@
  "state": "CA",
  "city_id": "San Diego|CA",
  "address": "1846 Garnet Ave, San Diego, CA 92109",
- "hours": "Sun–Thu 11:00 AM–9:00 PM; Fri–Sat 11:00 AM–9:30 PM",
+ "hours": "Sun–Thu 11am–9pm, Fri–Sat 11am–9:30pm; happy hour daily 3–6pm",
  "price_level": null,
  "aliases": [
   "Cafe Athena"
