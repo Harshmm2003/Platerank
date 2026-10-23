@@ -84,6 +84,7 @@ export type Results = {
   meta: RunMeta;
   questions: Record<string, string>;
   approvals: Record<string, { at: string; text: string }>;
+  mailto?: Record<string, string>;
   empty?: boolean;
   rank: {
     mention_rate: number; mentions: number; answers: number; avg_rank: number | null; share_of_voice: number;
@@ -121,7 +122,8 @@ export type Results = {
     creators_note: string;
     pack: ContentPack;
   };
-  improve: { history: { ts: number; platform: string; mention_rate: number; avg_rank: number | null; share_of_voice: number; answers: number }[]; note: string };
+  improve: { history: { ts: number; platform: string; mention_rate: number; avg_rank: number | null; share_of_voice: number; answers: number }[]; note: string;
+    compare: Compare };
 };
 
 export const pct = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x * 100)}%`);
@@ -131,3 +133,8 @@ export const miles = (m: number | null) => (m == null ? "" : m < 160 ? `${m} m` 
 export type PackPiece = { key: string; title: string; kind: "json" | "text" | "code"; text: string; note: string; flags: string[] };
 export type ContentPack = { pieces: PackPiece[]; is_sample: boolean; generated: { at: string; model: string } | null;
   facts_changed: boolean; can_generate: boolean };
+
+type Snap = { when: string; mention_rate: number; avg_rank: number | null; share_of_voice: number; answers?: number };
+export type Compare = { comparable: boolean; label: string; reason?: string; checks?: number; compared_checks?: number; skipped?: number;
+  platforms?: string[]; first?: Snap; latest?: Snap; change?: { mention_rate: number | null; avg_rank: number | null; share_of_voice: number | null };
+  by_category?: { category: string; first: number | null; latest: number | null; questions?: number }[] };

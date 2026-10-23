@@ -42,6 +42,21 @@ def save_answers(target: str, rows: list[dict]) -> float:
     con.commit(); con.close()
     return run_ts
 
+def answer_runs(target: str) -> dict[float, list[dict]]:
+    """Saved answer rows per run timestamp - lets older runs be compared by the questions they asked."""
+    if not DB.exists():
+        return {}
+    con = sqlite3.connect(DB)
+    try:
+        rows = con.execute("SELECT run_ts, query, category, status, mentioned FROM answers WHERE target=?", (target,)).fetchall()
+    except sqlite3.OperationalError:  # no answers table yet
+        rows = []
+    con.close()
+    out: dict[float, list[dict]] = {}
+    for ts, q, cat, status, mentioned in rows:
+        out.setdefault(ts, []).append({"query": q, "category": cat, "status": status, "mentioned": bool(mentioned)})
+    return out
+
 def slugify(name: str) -> str:
     import unicodedata  # 'Café Athena' -> 'cafe_athena'
     name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))

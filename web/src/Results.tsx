@@ -409,8 +409,11 @@ function Draft({ r, k, title, kind, text: initial, reload, strict, note, file }:
               title={strict && blocked ? "Fill in or delete every [OWNER TO CONFIRM] part first" : ""}>✓ Approve</Button>}
         <Button kind="ghost" small onClick={() => copy(text)}>Copy</Button>
         <Button kind="ghost" small disabled={!text.trim()} onClick={() => download(file || `${k}.txt`, text)}>Download</Button>
+        {k.startsWith("outreach") && (r.mailto?.[k]
+          ? <a href={r.mailto[k]} className="inline-flex items-center rounded-lg bg-brand-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-700">✉ Open in email</a>
+          : <Button small kind="secondary" disabled title="Approve the draft first - then it opens in your email app for you to send">✉ Open in email</Button>)}
       </div>
-      <p className="mt-2 text-xs text-stone-400">Approving only records your decision. PlateRank never publishes or sends anything.</p>
+      <p className="mt-2 text-xs text-stone-400">Approving only records your decision. PlateRank never publishes or sends anything{k.startsWith("outreach") ? " - “Open in email” fills a new message in your own email app; you choose who gets it and press send." : "."}</p>
     </Card>
   );
 }
@@ -455,16 +458,9 @@ function Improve({ r }: { r: R }) {
   if (r.is_sample) return <Card>The sample has no history. Run a real restaurant twice to see the trend here.</Card>;
   const W = 640, H = 200, pad = 30;
   const pts = h.map((x, i) => [pad + (h.length > 1 ? (i / (h.length - 1)) * (W - 2 * pad) : (W - 2 * pad) / 2), H - pad - x.mention_rate * (H - 2 * pad)]);
-  const first = h[0], last = h[h.length - 1];
   return (
     <div className="space-y-5">
-      {h.length >= 2 && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Stat label="First check" value={pct(first.mention_rate)} hint={new Date(first.ts * 1000).toLocaleString()} />
-          <Stat label="Latest check" value={pct(last.mention_rate)} hint={new Date(last.ts * 1000).toLocaleString()} />
-          <Stat label="Change" value={`${last.mention_rate >= first.mention_rate ? "+" : ""}${Math.round((last.mention_rate - first.mention_rate) * 100)} pts`} tone={last.mention_rate > first.mention_rate ? "good" : undefined} hint="directional — answers vary run to run" />
-        </div>
-      )}
+      <CompareCard r={r} />
       <Card>
         <h3 className="font-semibold">How often AI names you, check by check</h3>
         {h.length === 0 ? <p className="mt-2 text-sm text-stone-500">No checks saved yet.</p> : (
@@ -476,7 +472,7 @@ function Improve({ r }: { r: R }) {
           </svg>
         )}
         <p className="mt-2 text-xs text-stone-500">{r.improve.note}</p>
-        <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run a fresh check</Button></div>
+        <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run/fresh`)}>Re-check now (fresh answers)</Button></div>
       </Card>
     </div>
   );
@@ -551,5 +547,50 @@ function ContentPackSection({ r, reload }: { r: R; reload: () => void }) {
         ))}
       </div>
     </div>
+  );
+}
+
+const pts = (d: number | null | undefined) => (d == null ? "—" : `${d >= 0 ? "+" : ""}${Math.round(d * 100)} pts`);
+
+/** First vs latest check - only runs with the same questions, platforms and web-search setting. */
+function CompareCard({ r }: { r: R }) {
+  const m = r.improve.compare;
+  if (!m.comparable || !m.first || !m.latest || !m.change) return (
+    <Card><h3 className="font-semibold">Before and after</h3><p className="mt-1 text-sm text-stone-600">{m.reason}</p>
+      <p className="mt-1 text-xs text-stone-500">{m.label}</p></Card>
+  );
+  const { first, latest, change } = m;
+  const rows: [string, string, string, string][] = [
+    ["AI names you in", pct(first.mention_rate), pct(latest.mention_rate), pts(change.mention_rate)],
+    ["Your position when named", first.avg_rank?.toFixed(1) ?? "—", latest.avg_rank?.toFixed(1) ?? "—",
+      change.avg_rank == null ? "—" : `${change.avg_rank > 0 ? "+" : ""}${change.avg_rank.toFixed(1)} (lower is better)`],
+    ["Share of voice", pct(first.share_of_voice), pct(latest.share_of_voice), pts(change.share_of_voice)],
+  ];
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold">First check vs latest check</h3>
+        <Badge kind="neutral">{m.label}</Badge>
+      </div>
+      <p className="mt-1 text-xs text-stone-500">Same {first.answers ?? ""} questions on {m.platforms?.join(" + ")}.
+        {m.skipped ? ` ${m.skipped} other check(s) used different questions or platforms and are left out.` : ""}</p>
+      <table className="mt-3 w-full text-sm">
+        <thead><tr className="text-left text-stone-500"><th className="py-1 font-medium"></th><th className="font-medium">First · {first.when}</th>
+          <th className="font-medium">Latest · {latest.when}</th><th className="font-medium">Change</th></tr></thead>
+        <tbody>{rows.map(([label, a, b, d]) => (
+          <tr key={label} className="border-t border-stone-100"><td className="py-1.5">{label}</td><td>{a}</td><td className="font-semibold">{b}</td><td>{d}</td></tr>
+        ))}</tbody>
+      </table>
+      <More label={`Per question type (${m.by_category?.length ?? 0})`}>
+        <table className="w-full text-sm">
+          <tbody>{(m.by_category || []).map((c) => (
+            <tr key={c.category} className="border-t border-stone-100">
+              <td className="py-1">{c.category}</td><td>{pct(c.first)}</td><td>→</td><td className="font-semibold">{pct(c.latest)}</td>
+              <td className="text-stone-500">{c.first != null && c.latest != null ? pts(c.latest - c.first) : "—"}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </More>
+    </Card>
   );
 }

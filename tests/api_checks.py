@@ -376,6 +376,59 @@ check("no run yet: results route gives the make-only view (not a 404)", nr.statu
 check("no run yet: FAQ + email drafts ready", [d["key"] for d in nj["make"]["drafts"]] == ["faq_page", "outreach_email"])
 check("no run yet: unknown restaurant still 404", c.get("/api/restaurants/nope/results").status_code == 404)
 
+# ---- measurement: first vs latest (same question bank only) + tools/recheck.py (fake AI, temp DB)
+from platerank import store as _store
+ask_log = []
+def fake_claude(q, **kw):
+    ask_log.append(q)
+    hit = "happy hour" in q or (len(ask_log) > 36 and "dietary" not in q and "gluten" in q)
+    return (("Try Recheck Cafe or Other Place" if hit else "Try Other Place"), "fake-sonnet", [], 0.01)
+real_claude_ask = discovery.ASK["claude"]
+discovery.ASK["claude"] = fake_claude
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+c.put("/api/restaurants", json={"profile": {"name": "Recheck Cafe", "cuisine": "Greek", "area": "Harbor Point", "city": "Springfield",
+                                            "highlights": ["happy hour"], "competitors": [{"name": "Other Place"}]}})
+cmp0 = pipeline.improvement("recheck_cafe")
+check("improve: no checks yet -> plain reason", cmp0["comparable"] is False and "No checks" in cmp0["reason"], cmp0)
+pipeline.run("recheck_cafe", platforms=["claude"])
+n_q = len(ask_log)
+check("improve: one check -> asks for a re-check", "Only one check" in pipeline.improvement("recheck_cafe")["reason"])
+sys.path.insert(0, str(Path("tools").resolve()))
+import recheck
+check("recheck: no --yes and nobody to confirm -> nothing spent", recheck.main(["recheck_cafe"], interactive=False) == 1 and len(ask_log) == n_q)
+check("recheck: answer other than 'yes' -> cancelled", recheck.main(["recheck_cafe"], ask=lambda _: "no", interactive=True) == 1 and len(ask_log) == n_q)
+check("recheck: unknown restaurant -> plain message", recheck.main(["nope", "--yes"]) == 2)
+rc = recheck.main(["recheck_cafe", "--yes"])
+check("recheck: --yes asks every question fresh (no saved answers reused)", rc == 0 and len(ask_log) == 2 * n_q, (rc, len(ask_log), n_q))
+check("recheck: log line written", "fresh=" in (tmp / "live" / "recheck_cafe" / "recheck_log.txt").read_text(encoding="utf-8"))
+cmp1 = pipeline.improvement("recheck_cafe")
+cats1 = {x["category"]: x for x in cmp1.get("by_category", [])}
+check("improve: same questions -> first vs latest compared, labelled directional", cmp1["comparable"] and cmp1["label"].startswith("Directional")
+      and cmp1["first"]["mention_rate"] < cmp1["latest"]["mention_rate"] and cmp1["change"]["mention_rate"] > 0, cmp1)
+check("improve: per question type before/after", cats1["happy-hour"]["first"] == 1.0 and cats1["dietary"]["latest"] > cats1["dietary"]["first"], cats1)
+check("improve: results tab carries the comparison", c.get("/api/restaurants/recheck_cafe/results").json()["improve"]["compare"]["comparable"] is True)
+c.put("/api/restaurants", json={"profile": {"name": "Recheck Cafe", "cuisine": "Greek", "area": "Harbor Point", "highlights": ["happy hour", "catering"]},
+                                "previous_slug": "recheck_cafe"})
+pipeline.run("recheck_cafe", platforms=["claude"], reuse=False)
+cmp2 = pipeline.improvement("recheck_cafe")
+check("improve: question bank changed -> not compared, says why", cmp2["comparable"] is False and "same questions" in cmp2["reason"], cmp2)
+# an older run saved before fingerprints existed: rebuilt from its answer rows
+old = _store.load_runs("Recheck Cafe")[0]
+groups = _store.answer_runs("Recheck Cafe")
+legacy = {k: v for k, v in old.items() if k not in ("bank_hash", "answers_run_ts", "by_category", "platforms", "web_search")}
+check("improve: old run without fingerprint rebuilt from its saved answers",
+      pipeline._enrich(legacy, groups)["bank_hash"] == old["bank_hash"] and pipeline._enrich(legacy, groups)["by_category"] == old["by_category"])
+discovery.ASK["claude"] = real_claude_ask
+del os.environ["ANTHROPIC_API_KEY"]
+
+# ---- "Open in email": only for APPROVED outreach drafts, owner sends it themselves
+check("email: no link before approval", "outreach_email" not in c.get("/api/restaurants/check_diner/results").json().get("mailto", {}))
+c.post("/api/restaurants/check_diner/approve", json={"key": "outreach_email", "text": "Subject: A diner your readers may miss\n\nHi - I run Check Diner.\nThanks!"})
+ml = c.get("/api/restaurants/check_diner/results").json()["mailto"].get("outreach_email", "")
+check("email: approved -> mailto with subject + body, no recipient",
+      ml == "mailto:?subject=A%20diner%20your%20readers%20may%20miss&body=Hi%20-%20I%20run%20Check%20Diner.%0D%0AThanks%21", ml)
+check("email: no subject line -> default subject", cg.mailto_link("Hi there", "Collaboration with X").startswith("mailto:?subject=Collaboration%20with%20X&body=Hi%20there"))
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")

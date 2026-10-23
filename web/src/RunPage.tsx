@@ -5,12 +5,12 @@ import { go } from "./App";
 
 type Estimate = { questions: number; max_calls: number; cached: Record<string, number>; model: string; rough_max_cost_usd: number };
 
-export default function RunPage({ slug, status }: { slug: string; status: Status | null }) {
+export default function RunPage({ slug, status, fresh }: { slug: string; status: Status | null; fresh?: boolean }) {
   const isSample = slug === "example";
   const [profile, setProfile] = useState<Profile | null>(null);
   const [runs, setRuns] = useState(1);
   const [webSearch, setWebSearch] = useState(true);
-  const [reuse, setReuse] = useState(true);
+  const [reuse, setReuse] = useState(!fresh);  // #/r/<slug>/run/fresh = re-check with fresh answers
   const [est, setEst] = useState<Estimate | null>(null);
   const [useClaude, setUseClaude] = useState(true);
   const [useSaved, setUseSaved] = useState<Record<string, boolean>>({});

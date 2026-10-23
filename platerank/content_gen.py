@@ -73,6 +73,18 @@ def schema_markup(restaurant: str, url: str, menu_items: list[dict] | None = Non
             "it; add address + openingHours from the Google Business Profile. -->\n")
     return note + '<script type="application/ld+json">\n' + json.dumps(data, indent=2) + "\n</script>"
 
+def mailto_link(text: str, default_subject: str) -> str:
+    """mailto: with subject + body filled in, no recipient (we don't hold anyone's address).
+    A first line 'Subject: ...' becomes the subject."""
+    from urllib.parse import quote
+    lines = text.strip().splitlines()
+    subject = default_subject
+    if lines and lines[0].lower().startswith("subject:"):
+        subject, lines = lines[0].split(":", 1)[1].strip(), lines[1:]
+    body = "\n".join(lines).strip().replace("\n", "\r\n")
+    return f"mailto:?subject={quote(subject)}&body={quote(body)}"
+
+
 def outreach_email(profile: dict) -> str:
     """Pitch to a local food blog/listicle writer; the area and cuisine come from the profile."""
     restaurant, cuisine, area = profile["name"], profile["cuisine"], profile["area"]

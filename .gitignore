@@ -22,3 +22,4 @@ data/example_state/
 data/live/*/last_run.json
 data/live/*/nearby_cache.json
 web/node_modules/
+data/live/*/recheck_log.txt

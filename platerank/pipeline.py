@@ -24,6 +24,7 @@ from .reviews_vfm import (load_demo as load_reviews_demo, load_reviews, analyse_
 from .creators import load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places
 from .content_gen import faq_page, outreach_email
 from . import content_gen
+from .store import answer_runs as store_answer_runs
 from .store import (save_run, save_answers, load_runs, load_profile, load_example_profile, restaurant_dir,
                     DATA)
 
@@ -167,14 +168,85 @@ def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | Non
             "questions": len(queries)}
     _write(state_dir(slug) / "last_run.json", {"meta": meta, "rows": rows})
     if ok and not is_example:
-        save_answers(target, rows)
+        answers_ts = save_answers(target, rows)
         card = scorecard(ok, target, names)
         me = card[card.restaurant == target].iloc[0]
+        # bank fingerprint + platforms + web search: only runs that match on all three are compared
         save_run(target, "+".join(chosen), {"mention_rate": float(me.mention_rate), "mentions": int(me.mentions),
                                            "avg_rank": None if pd.isna(me.avg_rank) else float(me.avg_rank),
                                            "share_of_voice": float(me.share_of_voice), "answers": len(ok),
-                                           "runs": runs, **{k.lower(): v for k, v in counts.items()}})
+                                           "runs": runs, **{k.lower(): v for k, v in counts.items()},
+                                           "bank_hash": bank_hash(q.text for q in queries), "platforms": chosen,
+                                           "web_search": web_search, "answers_run_ts": answers_ts,
+                                           "by_category": _cat_rates(ok)})
     return meta
+
+
+# ------------------------------------------------------------------ Measurement: first vs latest
+DIRECTIONAL = "Directional - AI answers vary run to run."
+
+
+def bank_hash(texts) -> str:
+    import hashlib
+    return hashlib.sha256("\n".join(sorted(t.strip().lower() for t in texts)).encode("utf-8")).hexdigest()[:16]
+
+
+def _cat_rates(rows: list[dict]) -> dict:
+    cats = {}
+    for r in rows:
+        if r["status"] != FAILED:
+            cats.setdefault(r["category"], []).append(bool(r["mentioned"]))
+    return {c: {"rate": round(sum(v) / len(v), 3), "questions": len(v)} for c, v in cats.items()}
+
+
+def _enrich(run: dict, groups: dict) -> dict:
+    """Older runs saved no bank fingerprint - rebuild it from the answer rows saved in the same second."""
+    rows = groups.get(run.get("answers_run_ts"))
+    if rows is None:
+        near = [ts for ts in groups if abs(ts - run["ts"]) < 5]
+        rows = groups[min(near, key=lambda ts: abs(ts - run["ts"]))] if near else []
+    return {**run, "bank_hash": run.get("bank_hash") or (bank_hash({r["query"] for r in rows}) if rows else None),
+            "platforms": sorted(run.get("platforms") or run["platform"].split("+")),
+            "by_category": run.get("by_category") or _cat_rates(rows)}
+
+
+def improvement(slug: str) -> dict:
+    """First vs latest check - only runs with the same question bank, platforms and web-search setting."""
+    if slug == EXAMPLE_SLUG:
+        return {"comparable": False, "reason": "The sample has no history - run your own restaurant twice.", "label": DIRECTIONAL}
+    target = get_profile(slug)["name"]
+    groups = store_answer_runs(target)
+    runs = [_enrich(r, groups) for r in load_runs(target)]
+    if len(runs) < 2:
+        return {"comparable": False, "checks": len(runs), "label": DIRECTIONAL,
+                "reason": "Only one check so far - run a fresh re-check to see before and after." if runs else "No checks yet."}
+    latest = runs[-1]
+    same = lambda a: (a["bank_hash"] and a["bank_hash"] == latest["bank_hash"] and a["platforms"] == latest["platforms"]
+                      and (a.get("web_search") is None or latest.get("web_search") is None or a["web_search"] == latest["web_search"]))
+    earlier = [r for r in runs[:-1] if same(r)]
+    if not earlier:
+        return {"comparable": False, "checks": len(runs), "label": DIRECTIONAL,
+                "reason": "No earlier check used the same questions, AI platform and web-search setting as the latest one, "
+                          "so they aren't compared."}
+    first = earlier[0]
+    pick = lambda r: {"when": time.strftime("%Y-%m-%d %H:%M", time.localtime(r["ts"])), "mention_rate": r["mention_rate"],
+                      "avg_rank": r.get("avg_rank"), "share_of_voice": r["share_of_voice"], "answers": r.get("answers")}
+    delta = lambda k: None if first.get(k) is None or latest.get(k) is None else round(latest[k] - first[k], 3)
+    cats = sorted(set(first["by_category"]) | set(latest["by_category"]))
+    return {"comparable": True, "label": DIRECTIONAL, "checks": len(runs), "compared_checks": len(earlier) + 1,
+            "skipped": len(runs) - 1 - len(earlier), "platforms": latest["platforms"],
+            "first": pick(first), "latest": pick(latest),
+            "change": {k: delta(k) for k in ("mention_rate", "avg_rank", "share_of_voice")},
+            "by_category": [{"category": c, "first": first["by_category"].get(c, {}).get("rate"),
+                             "latest": latest["by_category"].get(c, {}).get("rate"),
+                             "questions": latest["by_category"].get(c, first["by_category"].get(c, {})).get("questions")}
+                            for c in cats]}
+
+
+def _mailtos(approvals: dict, restaurant: str) -> dict:
+    """'Open in email' links for APPROVED outreach drafts only - the owner picks the recipient and presses send."""
+    return {k: content_gen.mailto_link(v["text"], f"Collaboration with {restaurant}")
+            for k, v in approvals.items() if k.startswith("outreach")}
 
 
 # ------------------------------------------------------------------ owner data
@@ -395,6 +467,7 @@ def make_before_run(slug: str) -> dict | None:
     faq_text = faq_page(profile["name"], profile["area"], _faq_facts(profile, t_site, []))
     return {"restaurant": profile["name"], "slug": slug, "is_sample": slug == EXAMPLE_SLUG, "no_run": True,
             "questions": QUESTIONS, "approvals": _read(state_dir(slug) / "approved.json", {}),
+            "mailto": _mailtos(_read(state_dir(slug) / "approved.json", {}), profile["name"]),
             "make": {"drafts": [{"key": "faq_page", "title": "FAQ page", "kind": "text", "text": faq_text},
                                 {"key": "outreach_email", "title": "Pitch to local food writers", "kind": "text",
                                  "text": outreach_email(profile)}],
@@ -533,6 +606,7 @@ def results(slug: str) -> dict | None:
 
     # ---- 5. Did my visibility improve?
     hist = [] if is_example else load_runs(target)
-    out["improve"] = {"history": hist, "note": "Same-day changes are directional - AI answers vary run to run. "
+    out["mailto"] = _mailtos(approvals, target)
+    out["improve"] = {"history": hist, "compare": improvement(slug), "note": "Same-day changes are directional - AI answers vary run to run. "
                                                "The claim is the repeated re-test, not an instant jump."}
     return out

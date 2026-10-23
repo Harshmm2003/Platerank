@@ -46,7 +46,7 @@ export default function App() {
   else if (parts[0] === "r" && parts[1]) {
     const slug = parts[1];
     if (parts[2] === "setup") page = <Setup key={`${slug}-${parts[3]}`} slug={slug} step={Number(parts[3] || 1)} status={status} />;
-    else if (parts[2] === "run") page = <RunPage key={slug} slug={slug} status={status} />;
+    else if (parts[2] === "run") page = <RunPage key={`${slug}-${parts[3] || ""}`} slug={slug} status={status} fresh={parts[3] === "fresh"} />;
     else page = <Results key={slug} slug={slug} tab={parts[3] || "rank"} />;
   } else page = <Home status={status} data={list} error={listError} reload={reload} />;
 
