@@ -21,6 +21,7 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
     <Card><ErrorNote error={error} /><div className="mt-3"><Button onClick={() => go(`/r/${slug}/run`)}>Run a check</Button></div></Card>
   );
   if (!r) return <p className="text-stone-500">Loading results…</p>;
+  if (r.no_run) return <BeforeFirstCheck r={r} tab={tab} reload={load} />;
   const c = r.meta.counts;
   return (
     <div className="space-y-5">
@@ -42,20 +43,52 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
         </div>
       </div>
 
-      <nav className="flex gap-1 overflow-x-auto border-b border-stone-200">
-        {TABS.map(([key, n, label]) => (
-          <a key={key} href={`#/r/${slug}/results/${key}`}
-            className={cx("whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium", tab === key ? "border-brand-600 text-brand-700" : "border-transparent text-stone-500 hover:text-stone-800")}>
-            <span className="mr-1 text-xs text-stone-400">{n}</span>{label}
-          </a>
-        ))}
-      </nav>
+      <TabNav slug={slug} tab={tab} />
 
       {r.empty ? <Card>No answers came back in the last check, so there's nothing to score. Try again in a few minutes.</Card> :
         tab === "why" ? <Why r={r} reload={load} /> :
         tab === "change" ? <Change r={r} reload={load} /> :
         tab === "make" ? <Make r={r} reload={load} /> :
         tab === "improve" ? <Improve r={r} /> : <Rank r={r} />}
+    </div>
+  );
+}
+
+function TabNav({ slug, tab }: { slug: string; tab: string }) {
+  return (
+    <nav className="flex gap-1 overflow-x-auto border-b border-stone-200">
+      {TABS.map(([key, n, label]) => (
+        <a key={key} href={`#/r/${slug}/results/${key}`}
+          className={cx("whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium", tab === key ? "border-brand-600 text-brand-700" : "border-transparent text-stone-500 hover:text-stone-800")}>
+          <span className="mr-1 text-xs text-stone-400">{n}</span>{label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+/** No check yet: "Make the changes" (FAQ, email, content pack) already works from the saved facts. */
+function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () => void }) {
+  const active = tab === "rank" ? "make" : tab;
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">{r.restaurant}</h1>
+          <p className="mt-1 text-sm text-stone-500">Not checked yet - the website drafts below only need your saved facts.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button>
+          {!r.is_sample && <Button kind="ghost" onClick={() => go(`/r/${r.slug}/setup/1`)}>Edit setup</Button>}
+        </div>
+      </div>
+      <TabNav slug={r.slug} tab={active} />
+      {active === "make" ? <Make r={r} reload={reload} /> : (
+        <Card>
+          <p className="text-stone-700">Run a check first - this answer comes from asking AI assistants the questions your customers ask.</p>
+          <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button></div>
+        </Card>
+      )}
     </div>
   );
 }

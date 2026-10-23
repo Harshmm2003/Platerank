@@ -22,7 +22,7 @@ from .sources_audit import audit_sources, prioritized_gaps, load_demo_sources, l
 from .reviews_vfm import (load_demo as load_reviews_demo, load_reviews, analyse_restaurant, area_benchmark,
                           benchmark_label, price_scenario)
 from .creators import load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places
-from .content_gen import faq_page, schema_markup, outreach_email
+from .content_gen import faq_page, outreach_email
 from . import content_gen
 from .store import (save_run, save_answers, load_runs, load_profile, load_example_profile, restaurant_dir,
                     DATA)
@@ -377,6 +377,31 @@ def website_pack(slug: str) -> bytes:
     return content_gen.website_pack_zip(profile["name"], _read(state_dir(slug) / "approved.json", {}))
 
 
+def _faq_facts(profile: dict, site_audit: dict | None, weak_aspects: list[str]) -> dict:
+    menu, a = profile.get("menu", {}), site_audit or {}
+    return {"dietary_tags": a.get("dietary_tags_found"), "hero_dish": menu.get("hero_dish_name"),
+            "hero_price": menu.get("hero_dish_price"), "anchor_item": profile.get("anchor_item"),
+            "anchor_price": menu.get("anchor_price"), "weak_aspects": weak_aspects,
+            "address": profile.get("address"), "hours": profile.get("hours"), "highlights": profile.get("highlights")}
+
+
+def make_before_run(slug: str) -> dict | None:
+    """'Make the changes' works before the first check: FAQ, outreach email and the content pack only
+    need the saved facts. The other four tabs need a check (the UI says so)."""
+    profile = get_profile(slug)
+    if profile is None:
+        return None
+    t_site = _read(state_dir(slug) / "site_audit.json", {}).get(profile["name"], {}).get("audit") or {}
+    faq_text = faq_page(profile["name"], profile["area"], _faq_facts(profile, t_site, []))
+    return {"restaurant": profile["name"], "slug": slug, "is_sample": slug == EXAMPLE_SLUG, "no_run": True,
+            "questions": QUESTIONS, "approvals": _read(state_dir(slug) / "approved.json", {}),
+            "make": {"drafts": [{"key": "faq_page", "title": "FAQ page", "kind": "text", "text": faq_text},
+                                {"key": "outreach_email", "title": "Pitch to local food writers", "kind": "text",
+                                 "text": outreach_email(profile)}],
+                     "creators": [], "creators_note": "Run a check first - creator matches use the question types you're losing.",
+                     "pack": content_pack_view(slug, profile, t_site, None, faq_text)}}
+
+
 def results(slug: str) -> dict | None:
     profile = get_profile(slug)
     last = _read(state_dir(slug) / "last_run.json", None)
@@ -486,12 +511,7 @@ def results(slug: str) -> dict | None:
     t_site = site.get(target, {}).get("audit") or (src_data.get(target, {}).get("website", {}) if is_example else {})
     weak = [k for k, v in (target_analysis or {}).get("aspects", {}).items()
             if v["pos_ratio"] is not None and v["pos_ratio"] < 0.5 and v["mentions"] >= 3]
-    facts = {"dietary_tags": t_site.get("dietary_tags_found"), "hero_dish": menu.get("hero_dish_name"),
-             "hero_price": menu.get("hero_dish_price"), "anchor_item": profile.get("anchor_item"),
-             "anchor_price": menu.get("anchor_price"), "weak_aspects": weak,
-             "address": profile.get("address"), "hours": profile.get("hours"), "highlights": profile.get("highlights")}
-    items = ([{"name": menu["hero_dish_name"], "price": menu["hero_dish_price"]}]
-             if menu.get("hero_dish_name") and menu.get("hero_dish_price") else [])
+    facts = _faq_facts(profile, t_site, weak)
     pool = load_demo_creators() if is_example else load_live_creators()
     creators = []
     for c in match_creators(pool, lost_categories, local=local_places(profile)):
@@ -501,8 +521,6 @@ def results(slug: str) -> dict | None:
     out["make"] = {
         "drafts": [
             {"key": "faq_page", "title": "FAQ page", "kind": "text", "text": faq_text},
-            {"key": "schema_markup", "title": "Website schema (paste into the site's <head>)", "kind": "code",
-             "text": schema_markup(target, profile.get("website", ""), items, cuisine=profile.get("cuisine"))},
             {"key": "outreach_email", "title": "Pitch to local food writers", "kind": "text",
              "text": outreach_email(profile)},
         ],

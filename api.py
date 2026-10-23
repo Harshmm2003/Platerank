@@ -293,10 +293,8 @@ def stop(jid: str):
 @app.get("/api/restaurants/{slug}/results")
 def get_results(slug: str):
     _profile_or_404(slug)
-    r = pipeline.results(slug)
-    if r is None:
-        raise HTTPException(404, "No check has been run yet.")
-    return r
+    # before the first check: only "Make the changes" (FAQ, email, content pack) - marked no_run
+    return pipeline.results(slug) or pipeline.make_before_run(slug)
 
 
 @app.post("/api/restaurants/{slug}/site-audit")

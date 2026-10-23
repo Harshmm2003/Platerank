@@ -77,6 +77,7 @@ export type Gap = { gap: string; evidence: string; affected_categories: string[]
 export type Move = { title: string; evidence: string; quote?: string; route: "standard" | "creator" | "vfm"; priority: number | null; categories: string[] };
 
 export type Results = {
+  no_run?: boolean;
   restaurant: string;
   slug: string;
   is_sample: boolean;

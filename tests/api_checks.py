@@ -174,7 +174,7 @@ check("api: results have all 5 owner questions", all(k in res for k in ("rank", 
 check("api: sample is labelled", res["is_sample"] is True)
 check("api: sample mention rate 17%", res["rank"]["mention_rate"] == 0.17, res["rank"]["mention_rate"])
 check("api: gaps routed to engines", {g["action"] for g in res["why"]["gaps"]} <= {"standard", "creator", "vfm"} and res["why"]["gaps"])
-check("api: drafts ready for approval", [d["key"] for d in res["make"]["drafts"]] == ["faq_page", "schema_markup", "outreach_email"])
+check("api: drafts ready for approval (old schema card replaced by the content pack)", [d["key"] for d in res["make"]["drafts"]] == ["faq_page", "outreach_email"], [d["key"] for d in res["make"]["drafts"]])
 c.post("/api/restaurants/example/approve", json={"key": "faq_page", "text": "edited FAQ"})
 check("api: approval recorded", c.get("/api/restaurants/example/results").json()["approvals"]["faq_page"]["text"] == "edited FAQ")
 c.post("/api/restaurants/example/approve", json={"key": "faq_page", "undo": True})
@@ -367,6 +367,14 @@ check("pack: sample shows schemas only", c.get("/api/restaurants/example/results
 del os.environ["ANTHROPIC_API_KEY"]
 llm.claude_call = real_call
 llm._client = NoRealCalls()
+
+# ---- before the first check: "Make the changes" (content pack) already works
+nr = c.get("/api/restaurants/check_diner/results")
+nj = nr.json()
+check("no run yet: results route gives the make-only view (not a 404)", nr.status_code == 200 and nj.get("no_run") is True
+      and "rank" not in nj and [p_["key"] for p_ in nj["make"]["pack"]["pieces"]] == list(cg.PACK_FILES), list(nj))
+check("no run yet: FAQ + email drafts ready", [d["key"] for d in nj["make"]["drafts"]] == ["faq_page", "outreach_email"])
+check("no run yet: unknown restaurant still 404", c.get("/api/restaurants/nope/results").status_code == 404)
 
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
