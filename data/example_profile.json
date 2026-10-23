@@ -1,0 +1,54 @@
+{
+ "_note": "SAMPLE example dataset (fictional restaurant from the hackathon brief). Every number tied to it is sample data and is labelled SAMPLE in the app.",
+ "name": "Greenwich Kitchen",
+ "website": "https://greenwichkitchen.example.com",
+ "area": "NYU",
+ "neighbourhood": "Greenwich Village",
+ "city": "New York",
+ "cuisine": "healthy",
+ "price_level": 3,
+ "signature_terms": [
+  "grain bowl",
+  "salad"
+ ],
+ "anchor_item": "coffee",
+ "menu": {
+  "hero_dish_name": "Grain bowl",
+  "hero_dish_price": 24,
+  "anchor_price": 8
+ },
+ "competitors": [
+  {
+   "name": "Sweetgreen",
+   "website": "https://sweetgreen.com"
+  },
+  {
+   "name": "Dig",
+   "website": "https://diginn.com"
+  },
+  {
+   "name": "CAVA",
+   "website": "https://cava.com"
+  },
+  {
+   "name": "Mamoun's Falafel",
+   "website": "https://mamouns.com"
+  },
+  {
+   "name": "by CHLOE",
+   "website": "https://bychloe.example.com"
+  }
+ ],
+ "competitor_menus": {
+  "Dig": {
+   "entree_price": 15,
+   "anchor_price": 5,
+   "source": "SAMPLE menu record"
+  },
+  "Mamoun's Falafel": {
+   "entree_price": 9,
+   "anchor_price": 3,
+   "source": "SAMPLE menu record"
+  }
+ }
+}

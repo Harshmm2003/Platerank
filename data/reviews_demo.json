@@ -1,0 +1,129 @@
+{
+ "restaurants": {
+  "Dig": {
+   "avg_rating": 4.4,
+   "price_level": 2,
+   "review_count": 342,
+   "reviews": [
+    {
+     "rating": 5,
+     "text": "Delicious fresh bowl and affordable, great value for lunch."
+    },
+    {
+     "rating": 5,
+     "text": "Good food, fair price, generous portion. Worth it every time."
+    },
+    {
+     "rating": 4,
+     "text": "Tasty, cheap for the area, cozy enough and quick service."
+    },
+    {
+     "rating": 4,
+     "text": "Fresh and affordable, friendly staff, the line moves fast."
+    }
+   ]
+  },
+  "Greenwich Kitchen": {
+   "avg_rating": 4.1,
+   "price_level": 3,
+   "review_count": 47,
+   "reviews": [
+    {
+     "rating": 5,
+     "text": "The grain bowl was delicious and so fresh. Best tasty lunch near campus, the food is genuinely great."
+    },
+    {
+     "rating": 4,
+     "text": "Food is delicious and fresh every time. Love the salads here."
+    },
+    {
+     "rating": 5,
+     "text": "Amazing fresh food, the chicken bowl is the best I have had near NYU."
+    },
+    {
+     "rating": 4,
+     "text": "Really tasty and healthy, good flavor in every dish."
+    },
+    {
+     "rating": 3,
+     "text": "Food was good but $24 for a lunch bowl is expensive. Not worth that price for a student."
+    },
+    {
+     "rating": 2,
+     "text": "Overpriced. The bowl is fine but the price is too much, felt pricey for what you get."
+    },
+    {
+     "rating": 3,
+     "text": "Expensive for a cafe lunch. $8 for a coffee is too much when everywhere else is five dollars."
+    },
+    {
+     "rating": 2,
+     "text": "Pricey and the portion was small. Not good value at all."
+    },
+    {
+     "rating": 3,
+     "text": "The coffee is good but expensive, and the lunch price is not student friendly."
+    },
+    {
+     "rating": 2,
+     "text": "So loud at lunch, the music is blasting and seating is cramped. Hard to sit and study."
+    },
+    {
+     "rating": 3,
+     "text": "Cute vibe but very loud, tables cramped together, no comfortable seats to stay a while."
+    },
+    {
+     "rating": 2,
+     "text": "Ambience is off, harsh lighting and noise, not cozy at all despite the decor photos."
+    },
+    {
+     "rating": 4,
+     "text": "Staff were friendly and the server was attentive, service was quick."
+    },
+    {
+     "rating": 5,
+     "text": "Friendly staff, great service, they remembered my order."
+    },
+    {
+     "rating": 4,
+     "text": "Good service and the food came fast, no long wait."
+    },
+    {
+     "rating": 3,
+     "text": "Wait was slow at peak lunch, long line, but the food was fresh when it came."
+    },
+    {
+     "rating": 4,
+     "text": "Generous portion on the pasta, delicious and fresh."
+    },
+    {
+     "rating": 3,
+     "text": "Tasty dish but small portion for the price, left still hungry."
+    }
+   ]
+  },
+  "Mamoun's Falafel": {
+   "avg_rating": 4.5,
+   "price_level": 1,
+   "review_count": 1240,
+   "reviews": [
+    {
+     "rating": 5,
+     "text": "Best cheap eats, delicious falafel, amazing value, so affordable."
+    },
+    {
+     "rating": 5,
+     "text": "Cheap, tasty, generous portion, worth every dollar."
+    },
+    {
+     "rating": 4,
+     "text": "Not much ambience, cramped and loud, but the food is great and the price is perfect for students."
+    },
+    {
+     "rating": 5,
+     "text": "Friendly staff, fast service, delicious and budget friendly."
+    }
+   ]
+  }
+ }
+}

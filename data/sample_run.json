@@ -1,0 +1,212 @@
+[
+ {
+  "query": "best healthy lunch near NYU",
+  "category": "healthy",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Try Sweetgreen for fresh salads, Dig for grain bowls, and by CHLOE for vegan plates near NYU."
+ },
+ {
+  "query": "healthiest lunch options near NYU",
+  "category": "healthy",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Dig leads for balanced bowls, followed by Sweetgreen. CAVA is also a strong healthy pick."
+ },
+ {
+  "query": "healthy dinner spot Greenwich Village",
+  "category": "healthy",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "For healthy dinner in Greenwich Village, Sweetgreen and Dig are reliable, and Greenwich Kitchen does a fresh seasonal bowl worth trying."
+ },
+ {
+  "query": "best salads near NYU",
+  "category": "healthy",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Sweetgreen is the go-to for salads near NYU, then Just Salad and Dig."
+ },
+ {
+  "query": "cheap eats near NYU",
+  "category": "cheap",
+  "price_tier": "cheap",
+  "occasion": "any",
+  "answer": "For cheap eats, Mamoun's Falafel is iconic, followed by Doaba Deli and Greenwich Kitchen for an affordable lunch special."
+ },
+ {
+  "query": "best budget lunch for students near NYU",
+  "category": "cheap",
+  "price_tier": "cheap",
+  "occasion": "study",
+  "answer": "Students love Mamoun's Falafel, Doaba Deli, and CAVA for budget lunch near NYU."
+ },
+ {
+  "query": "affordable dinner Greenwich Village",
+  "category": "cheap",
+  "price_tier": "cheap",
+  "occasion": "any",
+  "answer": "Affordable dinner in Greenwich Village: Mamoun's Falafel, Artichoke Pizza, and Doaba Deli."
+ },
+ {
+  "query": "quiet date-night restaurant Greenwich Village",
+  "category": "date-night",
+  "price_tier": "mid",
+  "occasion": "date",
+  "answer": "For a quiet date night, try Olio e Pi\u00f9, followed by L'Artusi and Am\u00e9lie Wine Bar."
+ },
+ {
+  "query": "romantic dinner near NYU",
+  "category": "date-night",
+  "price_tier": "premium",
+  "occasion": "date",
+  "answer": "Romantic picks near NYU include L'Artusi, Olio e Pi\u00f9, and Am\u00e9lie Wine Bar."
+ },
+ {
+  "query": "best restaurant for a first date Greenwich Village",
+  "category": "date-night",
+  "price_tier": "mid",
+  "occasion": "date",
+  "answer": "A first date in Greenwich Village works well at Am\u00e9lie Wine Bar or Olio e Pi\u00f9."
+ },
+ {
+  "query": "good restaurant for a study group near NYU",
+  "category": "study",
+  "price_tier": "cheap",
+  "occasion": "study",
+  "answer": "For a study group, CAVA has space, and Greenwich Kitchen is quiet at lunch with room to sit. Dig also works."
+ },
+ {
+  "query": "lunch spot where a group of students can sit for a while near NYU",
+  "category": "study",
+  "price_tier": "any",
+  "occasion": "study",
+  "answer": "CAVA and Dig both tolerate long student lunches near NYU."
+ },
+ {
+  "query": "best brunch Greenwich Village",
+  "category": "brunch",
+  "price_tier": "mid",
+  "occasion": "group",
+  "answer": "Brunch in Greenwich Village: Jack's Wife Freda, Buvette, and Olio e Pi\u00f9."
+ },
+ {
+  "query": "weekend brunch near NYU",
+  "category": "brunch",
+  "price_tier": "mid",
+  "occasion": "group",
+  "answer": "Weekend brunch near NYU: Jack's Wife Freda first, then Buvette and Sadelle's."
+ },
+ {
+  "query": "vegan lunch near NYU",
+  "category": "dietary",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Vegan lunch near NYU: by CHLOE is the headline pick, then Sweetgreen and Dig."
+ },
+ {
+  "query": "gluten-free restaurant Greenwich Village",
+  "category": "dietary",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Gluten-free in Greenwich Village: Sweetgreen marks it clearly, as do Dig and CAVA."
+ },
+ {
+  "query": "best vegetarian options near NYU",
+  "category": "dietary",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Vegetarian near NYU: by CHLOE, Sweetgreen, and Mamoun's Falafel all deliver."
+ },
+ {
+  "query": "best lunch near NYU",
+  "category": "generic",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Best lunch near NYU right now: Dig, Sweetgreen, and CAVA are the names everyone gives."
+ },
+ {
+  "query": "where should I eat Greenwich Village?",
+  "category": "generic",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "In Greenwich Village, start with L'Artusi, Jack's Wife Freda, or Mamoun's Falafel depending on budget."
+ },
+ {
+  "query": "top rated restaurants near NYU",
+  "category": "generic",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Top rated near NYU: L'Artusi, Sweetgreen, and Jack's Wife Freda come up most."
+ },
+ {
+  "query": "fresh healthy food walking distance from Washington Square",
+  "category": "healthy",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Sweetgreen and Dig are the fresh healthy picks near Washington Square, with CAVA and Greenwich Kitchen close behind."
+ },
+ {
+  "query": "best value for money restaurant near NYU",
+  "category": "value",
+  "price_tier": "cheap",
+  "occasion": "any",
+  "answer": "For value near NYU, Dig gives generous portions for the price, followed by Mamoun's Falafel and CAVA."
+ },
+ {
+  "query": "where can a student eat well for under $15 near NYU?",
+  "category": "value",
+  "price_tier": "cheap",
+  "occasion": "study",
+  "answer": "Under $15 near NYU: Mamoun's Falafel first, then Dig and Doaba Deli. Greenwich Kitchen's lunch runs above that budget."
+ },
+ {
+  "query": "is it worth eating near NYU or is everything overpriced?",
+  "category": "value",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Some spots are worth it - Dig and Mamoun's Falafel get praised for value, while several cafes are called overpriced by students."
+ },
+ {
+  "query": "cozy dinner spot for two Greenwich Village",
+  "category": "date-night",
+  "price_tier": "mid",
+  "occasion": "date",
+  "answer": "Cozy for two in Greenwich Village: Olio e Pi\u00f9, then L'Artusi and Am\u00e9lie Wine Bar on a quiet weeknight."
+ },
+ {
+  "query": "coffee shop with good wifi and seating near NYU",
+  "category": "coffee",
+  "price_tier": "cheap",
+  "occasion": "study",
+  "answer": "For wifi and seating near NYU, try Joe Coffee or Think Coffee - both are student staples with room to work."
+ },
+ {
+  "query": "best coffee near NYU",
+  "category": "coffee",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Best coffee near NYU: Joe Coffee leads, then Think Coffee and Stumptown."
+ },
+ {
+  "query": "hidden gem restaurant Greenwich Village",
+  "category": "generic",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "A Greenwich Village hidden gem students name is Doaba Deli; Mamoun's Falafel is the other word-of-mouth pick."
+ },
+ {
+  "query": "best restaurant near NYU for visiting parents",
+  "category": "tourist",
+  "price_tier": "mid",
+  "occasion": "family",
+  "answer": "For visiting parents near NYU, L'Artusi and Olio e Pi\u00f9 are the safe impressive picks, with Jack's Wife Freda for brunch."
+ },
+ {
+  "query": "mejor restaurante saludable cerca de NYU",
+  "category": "tourist",
+  "price_tier": "any",
+  "occasion": "any",
+  "answer": "Para comida saludable cerca de NYU, Sweetgreen y Dig son las opciones m\u00e1s recomendadas."
+ }
+]

@@ -1,0 +1,86 @@
+{
+ "name": "YONO Sushi",
+ "website": "https://www.yonosushinyc.com/",
+ "cuisine": "sushi",
+ "area": "Penn Station",
+ "neighbourhood": "Midtown West",
+ "city": "New York",
+ "price_level": 2,
+ "signature_terms": [
+  "omakase",
+  "chirashi bowl",
+  "temaki hand rolls",
+  "spicy tuna hand roll",
+  "A5 wagyu handroll",
+  "bluefin tuna tart",
+  "crab crispy rice",
+  "shrimp tempura roll",
+  "grab-and-go sushi"
+ ],
+ "anchor_item": "Chirashi bowl",
+ "menu": {
+  "hero_dish_name": "Omakase",
+  "hero_dish_price": 95.0,
+  "anchor_price": null
+ },
+ "competitors": [
+  {
+   "name": "Sushi 35 West",
+   "website": "https://sushi35west.com",
+   "aliases": []
+  },
+  {
+   "name": "KazuNori: The Original Hand Roll Bar",
+   "website": "https://www.handrollbar.com",
+   "aliases": []
+  },
+  {
+   "name": "Beyond Sushi",
+   "website": "https://beyondsushi.com",
+   "aliases": []
+  },
+  {
+   "name": "Sushi Sen-nin",
+   "website": "https://sushisennin.com",
+   "aliases": []
+  },
+  {
+   "name": "Sushi Seki Times Square",
+   "website": "https://sushiseki.com",
+   "aliases": []
+  },
+  {
+   "name": "Sushi of Gari 46",
+   "website": "https://www.sushiofgari.com",
+   "aliases": []
+  }
+ ],
+ "competitor_menus": {
+  "Sushi of Gari 46": {
+   "entree_price": 24.0,
+   "source": "auto-read: median of 360 prices found on the menu page - check it before using it (https://www.sushiofgari.com/menu-columbus)"
+  }
+ },
+ "landmarks": [
+  "Moynihan Train Hall"
+ ],
+ "address": "421 8th Ave, New York, NY 10001 (Moynihan Train Hall)",
+ "hours": "Daily 11AM-10PM; sushi bar 12PM-7PM",
+ "aliases": [
+  "YONO",
+  "YONO Sushi by BondST"
+ ],
+ "verified": {
+  "source": "yonosushinyc.com (fetched 2026-10-22)",
+  "facts": [
+   "address",
+   "hours",
+   "name",
+   "concept: sushi bar + grab-and-go + chirashi/donburi bowls"
+  ],
+  "owner_confirmed": [
+   "location = Moynihan Train Hall",
+   "omakase $95 from real menu"
+  ]
+ }
+}

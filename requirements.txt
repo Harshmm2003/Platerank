@@ -1,0 +1,7 @@
+streamlit
+pandas
+requests
+beautifulsoup4
+anthropic>=0.115
+google-genai
+python-dotenv

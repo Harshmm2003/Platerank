@@ -1,0 +1,18 @@
+# secrets - never commit
+.env
+
+# local run history (SQLite) - each machine keeps its own
+data/runs.db
+
+# throwaway test restaurants
+data/live/test_*/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# machine-specific editor / Claude Code preview config
+.claude/
+.vscode/

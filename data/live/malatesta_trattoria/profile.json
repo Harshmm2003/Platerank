@@ -1,0 +1,50 @@
+{
+ "name": "Malatesta Trattoria",
+ "website": "http://malatestanyc.com/",
+ "cuisine": "Italian",
+ "area": "West Village",
+ "neighbourhood": "West Village",
+ "city": "New York",
+ "landmarks": [
+  "Christopher Street",
+  "Christopher St station",
+  "Hudson River Park",
+  "Stonewall Inn",
+  "Meatpacking District"
+ ],
+ "aliases": [
+  "Malatesta",
+  "Malatesta NYC",
+  "Malatesta Trattoria NYC"
+ ],
+ "price_level": 2,
+ "signature_terms": [
+  "spinach gnocchi in gorgonzola",
+  "tagliatelle al ragu",
+  "ravioli al formaggio in pink sauce",
+  "spaghetti chitarra",
+  "burrata",
+  "veal meatballs",
+  "pesto parmesan arancini",
+  "tiramisu",
+  "homemade pasta",
+  "cash only"
+ ],
+ "anchor_item": "Burrata",
+ "menu": {
+  "hero_dish_name": "Spinach Gnocchi in Gorgonzola Sauce",
+  "hero_dish_price": 18.5,
+  "anchor_price": 12.95
+ },
+ "competitors": [
+  {
+   "name": "Via Carota",
+   "website": "https://www.viacarota.com"
+  },
+  {
+   "name": "Osteria 57",
+   "website": "https://www.osteria57.com"
+  }
+ ],
+ "competitor_menus": {}
+}
