@@ -4,16 +4,19 @@ import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, i
 import { go } from "./App";
 
 const TABS = [
-  ["rank", "1", "Where do I rank?"],
-  ["why", "2", "Why are competitors winning?"],
-  ["change", "3", "What should I change?"],
-  ["make", "4", "Make the changes"],
-  ["improve", "5", "Did it improve?"],
-  ["farm", "6", "Data farming"],
-  ["social", "7", "Social media"],
+  ["rank", "1", "Where you rank"],
+  ["housekeeping", "2", "Housekeeping"],
+  ["social", "3", "Social media"],
+  ["business", "4", "Business value"],
+  ["farm", "5", "Data farming"],
+  ["todo", "6", "Your to-do list"],
+  ["improve", "7", "Did it improve?"],
 ] as const;
+// old links keep working
+const TAB_ALIAS: Record<string, string> = { why: "rank", change: "todo", make: "housekeeping" };
 
-export default function Results({ slug, tab }: { slug: string; tab: string }) {
+export default function Results({ slug, tab: rawTab }: { slug: string; tab: string }) {
+  const tab = TAB_ALIAS[rawTab] || rawTab;
   const [r, setR] = useState<R | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => api.get<R>(`/api/restaurants/${slug}/results`).then(setR).catch((e) => setError(e.message)), [slug]);
@@ -47,12 +50,14 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
 
       <TabNav slug={slug} tab={tab} reminders={activeReminders(r)} />
 
+      <Headline text={r.headlines?.[tab]} />
       {r.empty ? <Card>No answers came back in the last check, so there's nothing to score. Try again in a few minutes.</Card> :
-        tab === "why" ? <Why r={r} reload={load} /> :
-        tab === "change" ? <Change r={r} reload={load} /> :
-        tab === "make" ? <Make r={r} reload={load} /> :
-        tab === "improve" ? <Improve r={r} /> : tab === "farm" ? <FarmTab r={r} reload={load} /> : tab === "social" ? <SocialTab r={r} reload={load} /> : <Rank r={r} />}
-      <SourcesPanel slug={slug} />
+        tab === "housekeeping" ? <Make r={r} reload={load} /> :
+        tab === "social" ? <SocialTab r={r} reload={load} /> :
+        tab === "business" ? <BusinessTab r={r} reload={load} /> :
+        tab === "farm" ? <FarmTab r={r} reload={load} /> :
+        tab === "todo" ? <TodoTab r={r} reload={load} /> :
+        tab === "improve" ? <Improve r={r} /> : <RankTab r={r} reload={load} />}
     </div>
   );
 }
@@ -64,7 +69,7 @@ function TabNav({ slug, tab, reminders = 0 }: { slug: string; tab: string; remin
         <a key={key} href={`#/r/${slug}/results/${key}`}
           className={cx("whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium", tab === key ? "border-brand-600 text-brand-700" : "border-transparent text-stone-500 hover:text-stone-800")}>
           <span className="mr-1 text-xs text-stone-400">{n}</span>{label}
-          {key === "make" && reminders > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">Reminders ({reminders})</span>}
+          {key === "housekeeping" && reminders > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">Reminders ({reminders})</span>}
         </a>
       ))}
     </nav>
@@ -73,7 +78,7 @@ function TabNav({ slug, tab, reminders = 0 }: { slug: string; tab: string; remin
 
 /** No check yet: "Make the changes" (FAQ, email, content pack) already works from the saved facts. */
 function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () => void }) {
-  const active = tab === "rank" ? "make" : tab;
+  const active = tab;
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -87,14 +92,18 @@ function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () =>
         </div>
       </div>
       <TabNav slug={r.slug} tab={active} reminders={activeReminders(r)} />
-      {active === "make" ? <Make r={r} reload={reload} /> : active === "change" ? <PeopleSaySection slug={r.slug} /> :
-        active === "farm" ? <FarmTab r={r} reload={reload} /> : active === "social" ? <SocialTab r={r} reload={reload} /> : (
+      <Headline text={r.headlines?.[active]} />
+      {active === "housekeeping" ? <Make r={r} reload={reload} /> : active === "business" ? <BusinessTab r={r} reload={reload} /> :
+        active === "farm" ? <FarmTab r={r} reload={reload} /> : active === "social" ? <SocialTab r={r} reload={reload} /> :
+        active === "todo" ? <TodoTab r={r} reload={reload} /> : active === "rank" ? <div className="space-y-5">
+          <Card><p className="text-stone-700">Run the first check to see how often AI assistants recommend you.</p>
+            <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button></div></Card>
+          <PeopleSaySection slug={r.slug} part="quotes" /><SourcesPanel slug={r.slug} /></div> : (
         <Card>
           <p className="text-stone-700">Run a check first - this answer comes from asking AI assistants the questions your customers ask.</p>
           <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button></div>
         </Card>
       )}
-      <SourcesPanel slug={r.slug} />
     </div>
   );
 }
@@ -109,7 +118,7 @@ function Rank({ r }: { r: R }) {
         <Stat label="AI names you in" value={pct(k.mention_rate)} hint={`${k.mentions} of ${k.answers} answers`} tone={k.mention_rate < 0.2 ? "bad" : "good"} />
         <Stat label="Your position when named" value={k.avg_rank ?? "—"} hint="1 = named first" />
         {k.top_competitor && <Stat label={`${k.top_competitor.name} is named in`} value={pct(k.top_competitor.mention_rate)} hint="the most-recommended competitor" />}
-        <Stat label="Question types where you never appear" value={`${k.categories_at_zero.length}`} hint={k.categories_at_zero.slice(0, 4).join(", ")} tone={k.categories_at_zero.length ? "bad" : undefined} />
+        <Stat label="Question types where you never appear" value={`${k.categories_at_zero.length}`} hint={k.categories_at_zero.slice(0, 4).map((c) => c.replace(/-/g, " ")).join(", ")} tone={k.categories_at_zero.length ? "bad" : undefined} />
       </div>
       <Card>
         <h3 className="mb-3 font-semibold">How often each restaurant is recommended</h3>
@@ -128,7 +137,7 @@ function Rank({ r }: { r: R }) {
         <div className="flex flex-wrap gap-2">
           {k.by_category.map((c) => (
             <span key={c.category} className={cx("rounded-full px-3 py-1 text-sm", c.mention_rate === 0 ? "bg-red-50 text-red-800" : c.mention_rate < 0.34 ? "bg-amber-50 text-amber-900" : "bg-green-50 text-green-800")}>
-              {c.category} · {pct(c.mention_rate)}
+              {c.category.replace(/-/g, " ")} · {pct(c.mention_rate)}
             </span>
           ))}
         </div>
@@ -176,7 +185,6 @@ function Why({ r, reload }: { r: R; reload: () => void }) {
   return (
     <div className="space-y-5">
       <ErrorNote error={error} />
-      <AiSaysCard r={r} />
       <Card>
         <h3 className="font-semibold">The biggest reasons</h3>
         {w.gaps.length === 0 && w.site_gaps.length === 0 && (
@@ -297,9 +305,8 @@ function Change({ r, reload }: { r: R; reload: () => void }) {
   const groups = (["standard", "creator", "vfm"] as const).map((k) => [k, ch.moves.filter((m) => m.route === k)] as const);
   return (
     <div className="space-y-5">
-      <PeopleSaySection slug={r.slug} />
       <Card>
-        <h3 className="font-semibold">Your to-do list, most important first</h3>
+        <h3 className="font-semibold">Changes by tool</h3>
         <p className="text-sm text-stone-500">Each item comes from the evidence in step 2 and says which tool fixes it.</p>
         {ch.moves.length === 0 && <p className="mt-3 text-sm text-stone-500">No changes found yet — check the websites and add ratings in step 2.</p>}
         <div className="mt-3 grid gap-4 lg:grid-cols-3">
@@ -435,7 +442,7 @@ function Draft({ r, k, title, kind, text: initial, reload, strict, note, file, o
         readOnly={!!approved || !editing} onChange={(e) => setText(e.target.value)} />
       {note && <p className="mt-1 text-xs text-stone-500">{note}</p>}
       {text.includes("OWNER TO CONFIRM") && <p className="mt-1 text-xs text-amber-800">Fill in each [OWNER TO CONFIRM] before approving — we don't guess facts.</p>}
-      {strict && kind === "json" && text.trim() && !validJson(text) && <p className="mt-1 text-xs text-red-700">This isn't valid JSON any more — check the last edit.</p>}
+      {strict && kind === "json" && text.trim() && !validJson(text) && <p className="mt-1 text-xs text-red-700">This code has a typo now — undo your last edit.</p>}
       <ErrorNote error={error} />
       <div className="mt-3 flex flex-wrap gap-2">
         {approved ? <Button kind="secondary" small busy={busy} onClick={() => approve(true)}>Undo approval</Button>
@@ -495,28 +502,6 @@ function Make({ r, reload }: { r: R; reload: () => void }) {
       </div>
       <ContentPackSection r={r} reload={reload} />
       {hk && <SocialCard s={hk.social} />}
-      <Card>
-        <h3 className="font-semibold">Food creators to work with</h3>
-        <p className="text-sm text-stone-500">{m.creators_note} YouTube counts most: AI assistants read and cite it.</p>
-        {m.creators.length === 0 && <p className="mt-3 text-sm text-stone-500">No creators to show yet.</p>}
-      </Card>
-      {m.creators.map((c) => (
-        <div key={c.handle} className="space-y-2">
-          <Card>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div><span className="font-semibold">{c.handle}</span> <span className="text-sm text-stone-500">{c.platform} · {c.followers.toLocaleString()} followers</span></div>
-              <span className="text-sm">match <b>{c.relevance_score}</b>/100</span>
-            </div>
-            <p className="mt-1 text-xs text-stone-500">{c.why}</p>
-            <p className="mt-2 text-sm"><b>Video idea:</b> “{c.brief.concept_title}” — {c.brief.hook}</p>
-          </Card>
-          <div className="pl-4">
-            <More label={r.approvals[`outreach_${c.handle.replace(/^@/, "")}`] ? `Message to ${c.handle} ✓ approved` : `Message to ${c.handle}`}>
-              <Draft r={r} k={`outreach_${c.handle.replace(/^@/, "")}`} title={`Message to ${c.handle}`} kind="text" text={c.outreach} reload={reload} />
-            </More>
-          </div>
-        </div>
-      ))}
     </div>
     </HK.Provider>
   );
@@ -728,7 +713,7 @@ function AiSaysCard({ r }: { r: R }) {
 }
 
 /** Public reviews/forum quotes (one Claude web search), checked one by one, then Business Value from verified ones only. */
-function PeopleSaySection({ slug }: { slug: string }) {
+function PeopleSaySection({ slug, part = "both" }: { slug: string; part?: "quotes" | "value" | "both" }) {
   const [d, setD] = useState<PeopleSay | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -746,7 +731,7 @@ function PeopleSaySection({ slug }: { slug: string }) {
   const bv = d.business_value;
   return (
     <div className="space-y-5">
-      <Card>
+      {part !== "value" && <Card>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="font-semibold">What people say right now</h3>
@@ -769,8 +754,8 @@ function PeopleSaySection({ slug }: { slug: string }) {
             <ul>{grey.map((x, i) => <li key={i} className="border-t border-stone-100 py-2 text-sm text-stone-400">“{x.quote}” <EvidenceBadge ev={x.evidence} /></li>)}</ul>
           </More>}
         </>}
-      </Card>
-      <Card>
+      </Card>}
+      {part !== "quotes" && <Card>
         <h3 className="font-semibold">Business value - what reviews say to fix</h3>
         {!bv.ready ? <p className="mt-1 text-sm text-stone-500">{bv.reason}</p> : <>
           <p className="mt-1 font-medium">{bv.sentiment}</p>
@@ -789,9 +774,11 @@ function PeopleSaySection({ slug }: { slug: string }) {
                 <div className="mt-0.5 text-xs text-stone-500">{x.evidence}</div>
                 {x.quote && <div className="mt-0.5 text-xs">“{x.quote}” {x.source_url && <a className="text-sky-700" href={x.source_url} target="_blank" rel="noreferrer">{host(x.source_url)} ↗</a>}</div>}
               </li>))}</ol>}
-          <p className="mt-2 text-xs text-stone-400">Only verified quotes and reviews you pasted are counted. Same formulas as the Value-for-Money engine.</p>
+          <p className="mt-2 text-xs text-stone-400">Only checked quotes and reviews you pasted are counted.</p>
         </>}
-      </Card>
+        {part === "value" && !d.saved && d.can_search && <div className="mt-3"><Button small busy={busy} onClick={search}>Find what people say</Button></div>}
+        {part === "value" && busy && <SlowBar label="Searching review and forum pages, then checking every quote… (20–60 seconds)" />}
+      </Card>}
     </div>
   );
 }
@@ -981,6 +968,17 @@ function SocialTab({ r, reload }: { r: R; reload: () => void }) {
           </div>
         </Card>
       )}
+      {r.make?.creators?.length > 0 && (
+        <More label={`Your saved creators, matched to the questions you're losing (${r.make.creators.length})`}>
+          <p className="mb-2 text-xs text-stone-500">{r.make.creators_note}</p>
+          {r.make.creators.map((c) => (
+            <div key={c.handle} className="mb-3 space-y-1">
+              <div className="text-sm"><b>{c.handle}</b> <span className="text-stone-500">{c.platform} · {c.followers != null ? `${c.followers.toLocaleString()} followers` : "followers unknown"} · match {c.relevance_score}</span></div>
+              <p className="text-sm"><b>Video idea:</b> “{c.brief.concept_title}” — {c.brief.hook}</p>
+              <Draft r={r} k={`outreach_${c.handle.replace(/^@/, "")}`} title={`Message to ${c.handle}`} kind="text" text={c.outreach} reload={reload} />
+            </div>))}
+        </More>
+      )}
       {d.creators.filter((c) => c.verified).map((c) => (
         <More key={c.handle} label={`${c.name}: strategy, brief and message`}>
           <div className="space-y-2">
@@ -992,5 +990,65 @@ function SocialTab({ r, reload }: { r: R; reload: () => void }) {
       ))}
     </div>
     </HK.Provider>
+  );
+}
+
+function Headline({ text }: { text?: string }) {
+  return text ? <p className="text-lg font-semibold text-stone-800">{text}</p> : null;
+}
+
+/** 1 Where you rank: scorecard, what AI says, what people say, sources - details under "Show more". */
+function RankTab({ r, reload }: { r: R; reload: () => void }) {
+  return (
+    <div className="space-y-5">
+      <Rank r={r} />
+      <AiSaysCard r={r} />
+      <PeopleSaySection slug={r.slug} part="quotes" />
+      <More label="Show more: why competitors are named instead"><Why r={r} reload={reload} /></More>
+      <SourcesPanel slug={r.slug} />
+    </div>
+  );
+}
+
+/** 4 Business value: what checked reviews say to fix; the full value-for-money detail under "Show more". */
+function BusinessTab({ r, reload }: { r: R; reload: () => void }) {
+  return (
+    <div className="space-y-5">
+      <PeopleSaySection slug={r.slug} part="value" />
+      {r.change && <More label="Show more: value for money, price position and every change by tool"><Change r={r} reload={reload} /></More>}
+      {!r.change && !r.is_sample && <More label="Show more: paste reviews you have"><ReviewsForm r={r} reload={reload} /></More>}
+    </div>
+  );
+}
+
+const TAB_NAME: Record<string, string> = Object.fromEntries(TABS.map(([k, , label]) => [k, label]));
+
+/** 6 Your to-do list: one ranked list from every tab (ranking is plain code), done ticks saved. */
+function TodoTab({ r, reload }: { r: R; reload: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  async function tick(id: string, done: boolean) {
+    setError(null);
+    try { await api.post(`/api/restaurants/${r.slug}/todo`, { id, done }); reload(); } catch (e) { setError((e as Error).message); }
+  }
+  return (
+    <Card>
+      <ErrorNote error={error} />
+      {r.todo.length === 0 ? <p className="text-sm text-stone-500">Nothing yet - open the other tabs (or run a check) and the actions will appear here.</p> : (
+        <ol className="space-y-2">{r.todo.map((t, i) => (
+          <li key={t.id} className={cx("flex items-start gap-3 rounded-lg border border-stone-200 p-3", t.done && "opacity-60")}>
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={t.done} onChange={(e) => tick(t.id, e.target.checked)} title="Mark as done" />
+            <div className="min-w-0 flex-1">
+              <div className={cx("font-medium", t.done && "line-through")}>{i + 1}. {t.title}</div>
+              <div className="text-sm text-stone-500">{t.why}</div>
+              <div className="mt-1 flex flex-wrap gap-3 text-xs">
+                <a className="text-brand-700 underline" href={`#/r/${r.slug}/results/${t.tab}`}>Fix it in {TAB_NAME[t.tab] || t.tab} →</a>
+                {t.link && <a className="text-sky-700" href={t.link} target="_blank" rel="noreferrer">evidence ↗</a>}
+              </div>
+            </div>
+          </li>))}
+        </ol>
+      )}
+      <p className="mt-3 text-xs text-stone-400">Ranked by the evidence: competitor gaps first, then what reviews say, then your website, creators and Reddit.</p>
+    </Card>
   );
 }

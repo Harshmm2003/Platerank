@@ -430,6 +430,17 @@ def creators_save(slug: str, body: CreatorsIn):
     return pipeline.creators_save(slug, body.handles)
 
 
+class TodoIn(BaseModel):
+    id: str
+    done: bool
+
+
+@app.post("/api/restaurants/{slug}/todo")
+def todo_done(slug: str, body: TodoIn):
+    _profile_or_404(slug)
+    return pipeline.set_todo_done(slug, body.id, body.done)
+
+
 # ------------------------------------------------------------------ frontend
 if (WEB / "assets").exists():
     app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")

@@ -78,6 +78,8 @@ export type Move = { title: string; evidence: string; quote?: string; route: "st
 
 export type Results = {
   no_run?: boolean;
+  headlines: Record<string, string>;
+  todo: { id: string; title: string; why: string; link: string | null; tab: string; done: boolean }[];
   restaurant: string;
   slug: string;
   is_sample: boolean;
@@ -118,7 +120,7 @@ export type Results = {
   };
   make: {
     drafts: { key: string; title: string; kind: "text" | "code"; text: string }[];
-    creators: { handle: string; name: string; platform: string; followers: number; relevance_score: number; why: string; verified?: boolean; source_url?: string;
+    creators: { handle: string; name: string; platform: string; followers: number | null; relevance_score: number; why: string; verified?: boolean; source_url?: string;
       brief: { concept_title: string; hook: string; format: string; target_category: string; must_include_for_ai_citation: string[] }; outreach: string }[];
     creators_note: string;
     pack: ContentPack;

@@ -172,13 +172,15 @@ pn = c.post("/api/restaurants/check_diner/pin", json={"pinned": True})
 check("pin: saved in profile.json", pn.json()["pinned"] is True and
       json.loads((tmp / "live" / "check_diner" / "profile.json").read_text(encoding="utf-8"))["pinned"] is True, pn.json())
 lst = c.get("/api/restaurants").json()["restaurants"]
-check("pin: pinned restaurant listed first, others unpinned", lst[0]["slug"] == "check_diner" and lst[0]["pinned"]
-      and not any(r["pinned"] for r in lst[1:]), [(r["slug"], r["pinned"]) for r in lst])
+# (real data may already have a pinned restaurant, e.g. the demo one - so test order + this restaurant's own flag)
+flags = [r["pinned"] for r in lst]
+check("pin: pinned restaurants listed first", flags == sorted(flags, reverse=True)
+      and next(r for r in lst if r["slug"] == "check_diner")["pinned"] is True, [(r["slug"], r["pinned"]) for r in lst])
 # Setup sends a partial profile (no "pinned") - the saved pin must survive the merge
 c.put("/api/restaurants", json={"profile": {"name": "Check Diner", "cuisine": "diner", "area": "Union Sq"}, "previous_slug": "check_diner"})
 check("pin: editing the profile keeps the pin", c.get("/api/restaurants/check_diner").json()["profile"].get("pinned") is True)
 c.post("/api/restaurants/check_diner/pin", json={"pinned": False})
-check("pin: unpin saved", not any(r["pinned"] for r in c.get("/api/restaurants").json()["restaurants"]))
+check("pin: unpin saved", next(r for r in c.get("/api/restaurants").json()["restaurants"] if r["slug"] == "check_diner")["pinned"] is False)
 sp = c.post("/api/restaurants/example/pin", json={"pinned": True})
 check("pin: sample can't be pinned -> plain 400", sp.status_code == 400 and "sample" in sp.json()["detail"], sp.json())
 check("pin: unknown restaurant -> 404", c.post("/api/restaurants/nope/pin", json={"pinned": True}).status_code == 404)
@@ -578,7 +580,7 @@ FAKE_PAGES["https://taverna.example"] = FakePage('<html><head><title>Test Tavern
 sn = c.post("/api/restaurants/test_taverna/site-now").json()
 check("site now: one page read, real text per piece", sn["ok"] and '"telephone": "555-0100"' in sn["pieces"]["pack_restaurant_schema"]["text"]
       and "Family recipes from Crete" in sn["pieces"]["pack_about"]["text"] and "/menu.pdf" in sn["pieces"]["pack_menu_copy"]["text"], sn["pieces"].keys())
-check("site now: missing pieces said plainly", sn["pieces"]["pack_faq_schema"] == {"text": "No FAQ schema on the homepage.", "found": False, "evidence": None})
+check("site now: missing pieces said plainly", sn["pieces"]["pack_faq_schema"] == {"text": "Your homepage has no FAQ in the format AI reads.", "found": False, "evidence": None})
 check("site now: page text carries a verified (page fetch) badge + is in the ledger", sn["pieces"]["pack_about"]["evidence"]["tier"] == "page fetch"
       and any(e["subject"].startswith("your site now") for e in evidence.load("test_taverna")))
 check("site now: shown in 'Make the changes'", c.get("/api/restaurants/test_taverna/results").json()["make"]["housekeeping"]["site_now"]["ok"])
@@ -726,6 +728,25 @@ check("creators: saved creator with unknown engagement scores without crashing",
 check("creators: sample can't search", c.post("/api/restaurants/example/creators/find").status_code == 400)
 llm.claude_call = real_call
 del os.environ["ANTHROPIC_API_KEY"]
+
+# ---- every tab: one plain headline; the to-do list ranks actions from every tab (deterministic), ticks saved
+TAB_KEYS = {"rank", "housekeeping", "social", "business", "farm", "todo", "improve"}
+rc = c.get("/api/restaurants/recheck_cafe/results").json()
+check("headlines: one plain sentence for each of the 7 tabs", set(rc["headlines"]) == TAB_KEYS and all(rc["headlines"].values())
+      and rc["headlines"]["rank"].startswith("AI names Recheck Cafe in "), rc["headlines"])
+check("headlines: nothing technical on screen", not any(w in " ".join(rc["headlines"].values()).lower() for w in ("json", "schema", "api", "slug", "null")), rc["headlines"])
+td = rc["todo"]
+order = [x["id"].split(":")[0] for x in td]
+check("todo: max 10, unique, every item says why and which tab fixes it", 0 < len(td) <= 10 and len({x["id"] for x in td}) == len(td)
+      and all(x["why"] and x["tab"] in TAB_KEYS for x in td), td)
+rank_of = {"gap": 0, "site": 1, "bv": 2, "hk": 3, "cr": 4, "rd": 5}
+check("todo: deterministic order - gaps, business value, website, creators, Reddit", [rank_of[o] for o in order] == sorted(rank_of[o] for o in order)
+      and c.get("/api/restaurants/recheck_cafe/results").json()["todo"] == td, order)
+c.post("/api/restaurants/recheck_cafe/todo", json={"id": td[0]["id"], "done": True})
+check("todo: done tick saved", next(x for x in c.get("/api/restaurants/recheck_cafe/results").json()["todo"] if x["id"] == td[0]["id"])["done"] is True)
+nr2 = c.get("/api/restaurants/check_diner/results").json()
+check("todo + headlines also before the first check", set(nr2["headlines"]) == TAB_KEYS and "hasn't been checked yet" in nr2["headlines"]["rank"]
+      and isinstance(nr2["todo"], list), nr2["headlines"]["rank"])
 
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re

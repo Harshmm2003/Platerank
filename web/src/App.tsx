@@ -99,7 +99,7 @@ function Home({ status, data, error, reload }: { status: Status | null; data: Re
       <div className="mt-2 text-xs text-stone-500">{r.competitors} competitors · {r.last_run ? `last checked ${r.last_run}` : "not checked in this app yet"}</div>
       <div className="mt-4 flex flex-wrap gap-2">
         <Button small onClick={() => go(openPath(r))}>{r.last_run ? "See results" : "Run check"}</Button>
-        {!r.last_run && <Button small kind="secondary" onClick={() => go(`/r/${r.slug}/results/make`)}>Website drafts</Button>}
+        {!r.last_run && <Button small kind="secondary" onClick={() => go(`/r/${r.slug}/results/housekeeping`)}>Website drafts</Button>}
         <Button small kind="secondary" onClick={() => go(`/r/${r.slug}/setup/1`)}>Edit</Button>
         <Button small kind="ghost" busy={busy === r.slug} onClick={() => togglePin(r)}
                 title={r.pinned ? "Stop focusing the app on this restaurant" : "Focus the app on this restaurant"}>

@@ -25,7 +25,7 @@ from .creators import (load_demo_creators, load_live_creators, match_creators, c
                        score_with_unknowns)
 from .content_gen import faq_page, outreach_email
 from . import content_gen
-from .store import answer_runs as store_answer_runs
+from .store import answer_runs as store_answer_runs, slugify
 from .discovery import _norm as discovery_normalise
 from .store import (save_run, save_answers, load_runs, load_profile, load_example_profile, restaurant_dir,
                     DATA)
@@ -353,9 +353,9 @@ def _domain(url: str) -> str:
 
 
 # ------------------------------------------------------------------ website content pack (Action A)
-PACK_TITLES = {"pack_restaurant_schema": "Restaurant schema (JSON-LD)", "pack_faq_schema": "FAQ schema (JSON-LD)",
-               "pack_menu_schema": "Menu schema (JSON-LD)", "pack_about": "About us",
-               "pack_menu_copy": "Menu descriptions", "pack_landing": "Local landing page (HTML)"}
+PACK_TITLES = {"pack_restaurant_schema": "Your business details, in the format AI reads", "pack_faq_schema": "Your FAQ, in the format AI reads",
+               "pack_menu_schema": "Your menu, in the format AI reads", "pack_about": "About us",
+               "pack_menu_copy": "Menu descriptions", "pack_landing": "Local page for your website"}
 
 
 def _pack_facts(slug: str, profile: dict, site_audit: dict | None = None, reviews: dict | None = None) -> dict:
@@ -459,6 +459,115 @@ def _faq_facts(profile: dict, site_audit: dict | None, weak_aspects: list[str]) 
             "address": profile.get("address"), "hours": profile.get("hours"), "highlights": profile.get("highlights")}
 
 
+# ------------------------------------------------------------------ overview: one headline per tab + the ranked to-do list
+def _p(x) -> str:
+    return "-" if x is None else f"{round(x * 100)}%"
+
+
+def _first_line(s: str, n: int = 140) -> str:
+    s = re.sub(r"\s+", " ", str(s or "")).strip()
+    return s if len(s) <= n else s[: n - 1].rsplit(" ", 1)[0] + "…"
+
+
+def overview(slug: str, out: dict) -> dict:
+    """Adds out["headlines"] (one plain sentence per tab) and out["todo"] (max 10 actions from every tab).
+    Ranking is deterministic: gap priority first, then business value, then website drafts, creators, Reddit."""
+    profile = get_profile(slug)
+    name = profile["name"]
+    approvals = out.get("approvals", {})
+    pack = (out.get("make") or {}).get("pack") or {}
+    hk = (out.get("make") or {}).get("housekeeping") or {}
+    bv = business_value(slug) if slug != EXAMPLE_SLUG else {"ready": False, "reason": "The sample has no web reviews."}
+    cv = creators_view(slug) if slug != EXAMPLE_SLUG else {"creators": []}
+    fv = farm_view(slug) if slug != EXAMPLE_SLUG else {}
+    tabs = {"rank": "", "housekeeping": "", "social": "", "business": "", "farm": "", "todo": "", "improve": ""}
+
+    # 1 where you rank
+    if out.get("rank"):
+        rk = out["rank"]
+        rivals = [s for s in rk.get("scorecard", []) if s.get("restaurant") != name]
+        top = max(rivals, key=lambda s: s.get("mention_rate", 0)) if rivals else None
+        tabs["rank"] = f"AI names {name} in {_p(rk['mention_rate'])} of answers" + \
+                       (f"; {top['restaurant']} is named in {_p(top['mention_rate'])}." if top else ".")
+    else:
+        tabs["rank"] = f"{name} hasn't been checked yet - run the first check to see how often AI recommends it."
+    # 2 housekeeping
+    pieces = [p_ for p_ in pack.get("pieces", []) if p_.get("text")]
+    n_ok = sum(1 for p_ in pieces if p_["key"] in approvals)
+    now = hk.get("site_now") or {}
+    if now.get("ok"):
+        miss = [k for k in ("pack_restaurant_schema", "pack_faq_schema", "pack_menu_schema", "faq_page") if not now["pieces"].get(k, {}).get("found")]
+        tabs["housekeeping"] = f"Your website is missing {len(miss)} of 4 things AI assistants read; {n_ok} of {len(pieces)} ready-made fixes approved."
+    else:
+        tabs["housekeeping"] = f"{n_ok} of {len(pieces)} ready-made website fixes approved - read your current website to compare."
+    # 3 social media
+    ver = [c for c in cv.get("creators", []) if c.get("verified")]
+    tabs["social"] = (f"{len(ver)} verified local food creators found; {sum(c['saved'] for c in ver)} saved to contact." if cv.get("creators")
+                      else "No creators searched yet - find local food creators who cover your cuisine.")
+    # 4 business value
+    tabs["business"] = bv.get("sentiment") if bv.get("ready") else bv.get("reason", "")
+    # 5 data farming
+    if fv.get("at"):
+        tabs["farm"] = (f"{len(fv.get('threads', []))} live Reddit conversations and {len(fv.get('subreddits', []))} subreddits verified; "
+                        f"{len(fv.get('drafts', []))} replies ready for you to post.")
+    else:
+        tabs["farm"] = "Not searched yet - find where locals ask where to eat on Reddit."
+    # 7 did it improve
+    cmp = (out.get("improve") or {}).get("compare") or {}
+    tabs["improve"] = (f"AI named you in {_p(cmp['first']['mention_rate'])} of answers at the first check and {_p(cmp['latest']['mention_rate'])} "
+                       f"now - directional, answers vary run to run." if cmp.get("comparable") else
+                       cmp.get("reason") or "Run a second check later to see before and after.")
+
+    # 6 the to-do list
+    items = []
+    for g in sorted((out.get("why") or {}).get("gaps", []), key=lambda g: -(g.get("priority") or 0)):
+        items.append({"id": "gap:" + slugify(g["gap"])[:60], "title": g["gap"], "why": _first_line(g.get("evidence")), "link": None,
+                      "tab": {"standard": "housekeeping", "creator": "social", "vfm": "business"}.get(g.get("action"), "housekeeping"),
+                      "rank": (0, -(g.get("priority") or 0))})
+    for s in (out.get("why") or {}).get("site_gaps", []):
+        if not s.startswith("No structural gaps"):
+            items.append({"id": "site:" + slugify(s)[:60], "title": s, "why": "Found when we compared your website with the top competitor's.",
+                          "link": profile.get("website"), "tab": "housekeeping", "rank": (1, 0)})
+    for i, a in enumerate(bv.get("actions") or []):
+        items.append({"id": "bv:" + a["category"], "title": f"{a['category'].replace('_', ' / ').capitalize()}: {a['action']}",
+                      "why": _first_line(a["evidence"] + (f' - “{a["quote"]}”' if a.get("quote") else "")), "link": a.get("source_url"),
+                      "tab": "business", "rank": (2, i)})
+    for i, p_ in enumerate([p_ for p_ in pieces if p_["key"] not in approvals][:3]):
+        found = (now.get("pieces") or {}).get(p_["key"], {}).get("found") if now.get("ok") else None
+        items.append({"id": "hk:" + p_["key"], "title": f"Approve: {p_['title']}",
+                      "why": "Your website doesn't have this today." if found is False else "Ready-made from your facts - check and approve.",
+                      "link": now.get("url") or profile.get("website"), "tab": "housekeeping", "rank": (3, i)})
+    for i, c in enumerate([c for c in ver if c["outreach_key"] not in approvals][:2]):
+        items.append({"id": "cr:" + c["handle"], "title": f"Contact {c['name']} ({c['platform']})", "why": _first_line(f"Video idea: {c['brief']['concept_title']}"),
+                      "link": c["url"], "tab": "social", "rank": (4, i)})
+    posted = fv.get("posted") or {}
+    for i, d in enumerate(fv.get("drafts") or []):
+        if d["key"] in posted:
+            continue
+        ready = d["key"] in approvals
+        items.append({"id": "rd:" + d["key"], "title": (f"Post your {'reply' if d['type'] == 'reply' else 'post'} in r/{d['subreddit']}" if ready
+                                                     else f"Review your {'reply' if d['type'] == 'reply' else 'post'} for r/{d['subreddit']}"),
+                      "why": _first_line(d.get("thread_title") or d.get("rule") or "Owner-voiced draft from your facts."),
+                      "link": d.get("thread_url") or f"https://www.reddit.com/r/{d['subreddit']}/", "tab": "farm", "rank": (5 if not ready else 4.5, i)})
+    done = _read(state_dir(slug) / "todo_done.json", {})
+    items = sorted(items, key=lambda x: x["rank"])[:10]
+    for x in items:
+        x["done"] = bool(done.get(x["id"]))
+        x.pop("rank")
+    open_n = sum(not x["done"] for x in items)
+    tabs["todo"] = f"{open_n} thing{'s' if open_n != 1 else ''} to do, most important first." if items else "Nothing to do yet - run a check or open the other tabs."
+    out["headlines"], out["todo"] = tabs, items
+    return out
+
+
+def set_todo_done(slug: str, item_id: str, done: bool) -> dict:
+    path = state_dir(slug) / "todo_done.json"
+    data = _read(path, {})
+    data[item_id] = bool(done)
+    _write(path, data)
+    return data
+
+
 def make_before_run(slug: str) -> dict | None:
     """'Make the changes' works before the first check: FAQ, outreach email and the content pack only
     need the saved facts. The other four tabs need a check (the UI says so)."""
@@ -467,7 +576,7 @@ def make_before_run(slug: str) -> dict | None:
         return None
     t_site = _read(state_dir(slug) / "site_audit.json", {}).get(profile["name"], {}).get("audit") or {}
     faq_text = faq_page(profile["name"], profile["area"], _faq_facts(profile, t_site, []))
-    return {"restaurant": profile["name"], "slug": slug, "is_sample": slug == EXAMPLE_SLUG, "no_run": True,
+    return overview(slug, {"restaurant": profile["name"], "slug": slug, "is_sample": slug == EXAMPLE_SLUG, "no_run": True,
             "questions": QUESTIONS, "approvals": _read(state_dir(slug) / "approved.json", {}),
             "mailto": _mailtos(_read(state_dir(slug) / "approved.json", {}), profile["name"]),
             "make": {"drafts": [{"key": "faq_page", "title": "FAQ page", "kind": "text", "text": faq_text},
@@ -475,7 +584,7 @@ def make_before_run(slug: str) -> dict | None:
                                  "text": outreach_email(profile)}],
                      "creators": [], "creators_note": "Run a check first - creator matches use the question types you're losing.",
                      "pack": content_pack_view(slug, profile, t_site, None, faq_text),
-                     "housekeeping": _housekeeping(slug, profile, [])}}
+                     "housekeeping": _housekeeping(slug, profile, [])}})
 
 
 # ------------------------------------------------------------------ qualitative: what AI says / what people say
@@ -672,8 +781,8 @@ def read_site_now(slug: str) -> dict:
         "pack_landing": f"Page title: {page['title'] or '(none)'}\nDescription: {desc.group(1) if desc else '(none)'}\n"
                         f"{len(text.split())} words of readable text on the homepage.",
     }
-    missing = {"pack_restaurant_schema": "No Restaurant schema on the homepage.", "pack_faq_schema": "No FAQ schema on the homepage.",
-               "faq_page": "No FAQ on the homepage.", "pack_menu_schema": "No Menu schema on the homepage.",
+    missing = {"pack_restaurant_schema": "Your homepage doesn't give AI your business details in its format.", "pack_faq_schema": "Your homepage has no FAQ in the format AI reads.",
+               "faq_page": "No FAQ on the homepage.", "pack_menu_schema": "Your homepage has no menu in the format AI reads.",
                "pack_menu_copy": "No menu link found on the homepage.", "pack_about": "No readable text on the homepage."}
     recs = evidence.record_direct(slug, [{"kind": "quote", "text": v[:300], "source_url": url, "page_title": page["title"],
                                           "subject": f"your site now: {PACK_TITLES.get(k, 'FAQ page')}"} for k, v in found.items() if v])
@@ -1029,4 +1138,4 @@ def results(slug: str) -> dict | None:
     out["mailto"] = _mailtos(approvals, target)
     out["improve"] = {"history": hist, "compare": improvement(slug), "note": "Same-day changes are directional - AI answers vary run to run. "
                                                "The claim is the repeated re-test, not an instant jump."}
-    return out
+    return overview(slug, out)

@@ -32,7 +32,32 @@
  "signature_terms": [],
  "anchor_item": "",
  "menu": {},
- "competitors": [],
+ "competitors": [
+  {
+   "name": "Spitz - Pacific Beach",
+   "website": "",
+   "aliases": [],
+   "source": "owner-approved (earlier verified Claude suggestions)"
+  },
+  {
+   "name": "Shawarma Shack Mediterranean Grill",
+   "website": "",
+   "aliases": [],
+   "source": "owner-approved (earlier verified Claude suggestions)"
+  },
+  {
+   "name": "Slowly Restaurant & Lounge",
+   "website": "",
+   "aliases": [],
+   "source": "owner-approved (earlier verified Claude suggestions)"
+  },
+  {
+   "name": "Mr Shawarma",
+   "website": "",
+   "aliases": [],
+   "source": "owner-approved (earlier verified Claude suggestions)"
+  }
+ ],
  "competitor_menus": {},
  "facts_note": "Owner-confirmed via the hackathon brief (Oct 23, 2026): address, website, hours, happy hour, dietary options, full bar, catering, group dining, private events, open since 1990.",
  "lat": 32.8002413,
@@ -45,5 +70,6 @@
   "website": "https://www.yelp.com/biz/cafe-athena-san-diego-4",
   "hours": "https://maps.apple.com/place?place-id=IF11C1ABEDAC42A4F"
  },
- "year_opened": 1990
+ "year_opened": 1990,
+ "pinned": true
 }
