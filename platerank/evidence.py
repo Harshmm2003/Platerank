@@ -113,7 +113,7 @@ def matches(kind: str, text: str, page: str) -> bool:
     if kind == "price_level":
         n = int(float(t)) if t.replace(".", "").isdigit() else len(t)
         return re.search(r"(?<!\$)" + r"\$" * n + r"(?!\$)", page) is not None
-    if kind == "name":  # 'KazuNori: The Original Hand Roll Bar' -> also accept 'KazuNori'
+    if kind in ("name", "profile", "subreddit"):  # 'KazuNori: The Original Hand Roll Bar' -> also accept 'KazuNori'
         short = re.split(r"\s*[:(|]\s*|\s+-\s+", t)[0].strip()
         return t in page or (len(short) >= 4 and short in page)
     if kind == "website":
@@ -162,6 +162,23 @@ def _id(kind: str, text: str, url: str) -> str:
     return hashlib.sha256(f"{kind}|{normalise(str(text))}|{url}".encode()).hexdigest()[:12]
 
 
+EXISTENCE_KINDS = ("subreddit", "profile")
+
+
+def _under(url: str, base: str, kind: str) -> bool:
+    """For a subreddit, any page inside it proves it exists (reddit.com/r/sandiego/comments/... is under r/sandiego)."""
+    if kind != "subreddit" or not base:
+        return False
+    norm = lambda u: re.sub(r"^https?://(www\.|old\.)?", "", (u or "").strip()).rstrip("/").lower()
+    return norm(url).startswith(norm(base) + "/")
+
+
+def search_citations(r) -> list[dict]:
+    """A ClaudeResult's citations (quoted text) + its search results (url + title, existence only)."""
+    return list(getattr(r, "citations", []) or []) + [{"url": s.get("url"), "title": s.get("title", ""), "cited_text": "", "from": "result"}
+                                                      for s in getattr(r, "sources", []) or []]
+
+
 def _same_url(a: str, b: str) -> bool:
     norm = lambda u: re.sub(r"^https?://(www\.)?", "", (u or "").strip()).rstrip("/").lower()
     return norm(a) == norm(b)
@@ -174,6 +191,13 @@ def verify(record: dict, get=None, pages: dict | None = None, citations: list | 
     out = _verify_page(record, get, pages)
     if out["status"] != VERIFIED:
         for c in citations or []:
+            # "this page exists" claims: the search engine returned that page (or one inside that subreddit)
+            if record["kind"] in EXISTENCE_KINDS and c.get("url") and (_same_url(c["url"], record.get("source_url")) or
+                                                                       _under(c["url"], record.get("source_url"), record["kind"])):
+                return {**out, "status": VERIFIED, "tier": "search result", "page_title": out.get("page_title") or c.get("title", ""),
+                        "check_note": "the web search returned this page (" + out["check_note"] + ")"}
+            if c.get("from") == "result":
+                continue  # a result title only confirms that page exists, not a quote
             if _same_url(c.get("url"), record.get("source_url")) and matches(record["kind"], record["text"], normalise(c.get("cited_text", ""))):
                 return {**out, "status": VERIFIED, "tier": "search citation", "page_title": out.get("page_title") or c.get("title", ""),
                         "check_note": "matched the search engine's citation of this page (" + out["check_note"] + ")"}

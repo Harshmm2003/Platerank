@@ -24,7 +24,8 @@ SUBS_PROMPT = (
     "words, or null). Only include communities you actually found. Never guess a rule.")
 THREADS_PROMPT = (
     "Search the web for recent Reddit threads (last 12 months) where people ask for recommendations that {name} could "
-    "honestly answer: {cuisine} food, {asks} in or near {where}. Reply with ONLY a JSON array (max 8) of objects: "
+    "honestly answer: {cuisine} food, {asks} in or near {where}. Run searches like 'site:reddit.com {cuisine} {area}', "
+    "'site:reddit.com happy hour {area}' and 'site:reddit.com best {cuisine} {city}'. Reply with ONLY a JSON array (max 8) of objects: "
     "subreddit (without r/), title (the thread title copied exactly), url (the thread's reddit.com link), date (as shown, or "
     "null), asks_for (a few words). Only real threads you found; never invent one.")
 DRAFT_SYSTEM = (
@@ -80,10 +81,10 @@ def find(slug: str, profile: dict) -> dict:
         name = _sub_name(s.get("name") or s.get("url"))
         if not name:
             continue
-        items = [{"kind": "quote", "text": f"r/{name}", "source_url": s.get("url") or f"https://www.reddit.com/r/{name}/", "subject": "subreddit"}]
+        items = [{"kind": "subreddit", "text": name, "source_url": s.get("url") or f"https://www.reddit.com/r/{name}/", "subject": "subreddit"}]
         if s.get("rule_quote") and s.get("rules_url"):
             items.append({"kind": "quote", "text": s["rule_quote"], "source_url": s["rules_url"], "subject": f"r/{name} rule"})
-        recs = evidence.record_and_verify(slug, items, citations=r1.citations)
+        recs = evidence.record_and_verify(slug, items, citations=evidence.search_citations(r1))
         if recs[0]["status"] != evidence.VERIFIED:
             continue
         rule_ok = len(recs) > 1 and recs[1]["status"] == evidence.VERIFIED
@@ -94,11 +95,12 @@ def find(slug: str, profile: dict) -> dict:
                      "self_promotion": (s.get("self_promotion") or "unknown") if rule_ok else "unknown",
                      "weekly_thread": s.get("weekly_thread") if rule_ok else None,
                      "flair_required": s.get("flair_required") if rule_ok else None})
-    r2 = llm.claude_call(THREADS_PROMPT.format(name=profile["name"], cuisine=profile["cuisine"], asks=_asks(profile), where=_where(profile)),
+    r2 = llm.claude_call(THREADS_PROMPT.format(name=profile["name"], cuisine=profile["cuisine"], asks=_asks(profile), where=_where(profile),
+                                               area=(profile.get("area_nicknames") or [profile.get("area")])[0], city=profile.get("city") or ""),
                          tools=[llm.web_search_tool(max_uses=5, location=loc)], max_tokens=5000)
     threads_raw = [t for t in _json_list(r2.text) if str(t.get("url", "")).startswith("http") and "reddit.com" in str(t.get("url")) and t.get("title")]
     recs = evidence.record_and_verify(slug, [{"kind": "quote", "text": t["title"], "source_url": t["url"], "subject": f"r/{_sub_name(t.get('subreddit'))} thread"}
-                                             for t in threads_raw], citations=r2.citations)
+                                             for t in threads_raw], citations=evidence.search_citations(r2))
     threads = [{"subreddit": _sub_name(t.get("subreddit")), "title": t["title"], "url": t["url"], "date": t.get("date"),
                 "asks_for": t.get("asks_for"), "evidence": evidence.badge(rec)} for t, rec in zip(threads_raw, recs) if rec["status"] == evidence.VERIFIED]
     counts = {"subreddits_found": len(subs_raw), "subreddits_verified": len(subs), "threads_found": len(threads_raw), "threads_verified": len(threads)}

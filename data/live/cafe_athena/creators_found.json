@@ -1,0 +1,144 @@
+{
+ "at": "2026-10-23 13:36",
+ "creators": [
+  {
+   "handle": "@savagefoodiee",
+   "name": "Sav (Savagefoodiee)",
+   "platform": "TikTok",
+   "url": "https://www.tiktok.com/@savagefoodiee",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "Pacific Beach, San Diego, CA",
+   "niches": [
+    "happy-hour"
+   ],
+   "best_performing_format": "invited restaurant tasting videos",
+   "photo_url": null,
+   "verified": false,
+   "source_url": "https://www.tiktok.com/@savagefoodiee",
+   "evidence": {
+    "id": "9ab7a9dbff23",
+    "status": "unverified",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:36",
+    "source_url": "https://www.tiktok.com/@savagefoodiee",
+    "page_title": "TikTok - Make Your Day",
+    "check_note": "the page needs a browser to read - open the link to check",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": null
+  },
+  {
+   "handle": "@joeythefoodiesd",
+   "name": "Joey | San Diego Foodie",
+   "platform": "TikTok",
+   "url": "https://www.tiktok.com/@joeythefoodiesd",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego County, CA (incl. Vista)",
+   "niches": [
+    "lunch"
+   ],
+   "best_performing_format": "dish-by-dish restaurant showcase videos",
+   "photo_url": null,
+   "verified": false,
+   "source_url": "https://www.tiktok.com/@joeythefoodiesd",
+   "evidence": {
+    "id": "5ae9bffe7f30",
+    "status": "unverified",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:36",
+    "source_url": "https://www.tiktok.com/@joeythefoodiesd",
+    "page_title": "TikTok - Make Your Day",
+    "check_note": "the page needs a browser to read - open the link to check",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": null
+  },
+  {
+   "handle": "@saritathestylist",
+   "name": "Sarita the Stylist",
+   "platform": "TikTok",
+   "url": "https://www.tiktok.com/@saritathestylist",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego, CA",
+   "niches": [
+    "generic"
+   ],
+   "best_performing_format": "restaurant review videos",
+   "photo_url": null,
+   "verified": false,
+   "source_url": "https://www.tiktok.com/@saritathestylist",
+   "evidence": {
+    "id": "17769c3871c1",
+    "status": "unverified",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:36",
+    "source_url": "https://www.tiktok.com/@saritathestylist",
+    "page_title": "TikTok - Make Your Day",
+    "check_note": "the page needs a browser to read - open the link to check",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": null
+  },
+  {
+   "handle": "@savanasmith",
+   "name": "Savana Smith",
+   "platform": "TikTok",
+   "url": "https://www.tiktok.com/@savanasmith",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego, CA",
+   "niches": [
+    "generic"
+   ],
+   "best_performing_format": "short restaurant feature videos",
+   "photo_url": null,
+   "verified": false,
+   "source_url": "https://www.tiktok.com/@savanasmith",
+   "evidence": {
+    "id": "41e15b1e427f",
+    "status": "unverified",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:36",
+    "source_url": "https://www.tiktok.com/@savanasmith",
+    "page_title": "TikTok - Make Your Day",
+    "check_note": "the page needs a browser to read - open the link to check",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": null
+  },
+  {
+   "handle": "@le_vjollca",
+   "name": "Vjollca Hennie",
+   "platform": "TikTok",
+   "url": "https://www.tiktok.com/@le_vjollca",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego, CA (Linda Vista)",
+   "niches": [
+    "generic"
+   ],
+   "best_performing_format": "short restaurant feature videos",
+   "photo_url": null,
+   "verified": false,
+   "source_url": "https://www.tiktok.com/@le_vjollca",
+   "evidence": {
+    "id": "17f9ffb1ef73",
+    "status": "unverified",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:36",
+    "source_url": "https://www.tiktok.com/@le_vjollca",
+    "page_title": "TikTok - Make Your Day",
+    "check_note": "the page needs a browser to read - open the link to check",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": null
+  }
+ ],
+ "found": 6,
+ "dropped_no_url": 0,
+ "rejected": 1,
+ "cost_usd": 0.4692
+}

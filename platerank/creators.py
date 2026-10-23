@@ -96,7 +96,8 @@ def map_niches(niches) -> list[str]:
 
 
 FIND_PROMPT = (
-    "Search the web for real food content creators who cover {cuisine} food in or near {where}: YouTube channels first, then "
+    "Search the web for real food content creators who cover {cuisine} food in or near {where}. First run searches like "
+    "'youtube {cuisine} food {city}' and 'youtube {city} food review' for YouTube channels, then "
     "TikTok, Instagram and local food blogs. Reply with ONLY a JSON array (max 10) of objects: name, handle (with @ for social "
     "accounts), platform (YouTube, TikTok, Instagram or Blog), url (their channel/profile/blog page - required), local_to (the "
     "city or area they cover), niches (short words like budget, date night, brunch, cocktails, healthy), followers (the number "
@@ -110,7 +111,7 @@ def find_creators(slug: str, profile: dict, lost_categories: list[str]) -> dict:
     import re, time
     from . import evidence, llm
     where = ", ".join(x for x in (profile.get("neighbourhood") or profile.get("area"), profile.get("city"), profile.get("state")) if x)
-    r = llm.claude_call(FIND_PROMPT.format(cuisine=profile["cuisine"], where=where),
+    r = llm.claude_call(FIND_PROMPT.format(cuisine=profile["cuisine"], where=where, city=profile.get("city") or where),
                         tools=[llm.web_search_tool(max_uses=5, location=llm.location_for(profile))], max_tokens=6000)
     try:
         raw = llm.json_from(r.text or "[]")
@@ -121,11 +122,11 @@ def find_creators(slug: str, profile: dict, lost_categories: list[str]) -> dict:
     rows = []
     for x in usable:
         who = str(x.get("name") or x.get("handle"))
-        items = [{"kind": "name", "text": who, "source_url": x["url"], "subject": f"creator ({x.get('platform') or 'web'})"}]
+        items = [{"kind": "profile", "text": who, "source_url": x["url"], "subject": f"creator ({x.get('platform') or 'web'})"}]
         if x.get("followers") not in (None, ""):
             items.append({"kind": "followers", "text": str(x["followers"]), "source_url": x.get("followers_source_url") or x["url"],
                           "subject": f"{who}: followers"})
-        recs = evidence.record_and_verify(slug, items, citations=r.citations)
+        recs = evidence.record_and_verify(slug, items, citations=evidence.search_citations(r))
         if recs[0]["status"] == evidence.REJECTED:
             continue
         fol = recs[1] if len(recs) > 1 else None

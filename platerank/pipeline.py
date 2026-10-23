@@ -635,6 +635,18 @@ def public_reviews(slug: str) -> dict | None:
     return _read(state_dir(slug) / "public_reviews.json", None)
 
 
+GENERIC_NAME_WORDS = {"cafe", "restaurant", "grill", "kitchen", "bar", "the", "and", "lounge", "bistro", "taverna", "eatery", "house"}
+
+
+def _about(profile: dict, item: dict) -> bool:
+    """Is this quote about THIS restaurant? Its distinctive name word must be in the link, the page title or the quote
+    (a Yelp *search* page about Greek food in general is not a review of the restaurant)."""
+    words = {w for n in [profile["name"]] + (profile.get("aliases") or []) for w in re.findall(r"[a-z0-9]+", discovery_normalise(n))
+             if len(w) >= 3 and w not in GENERIC_NAME_WORDS}
+    hay = discovery_normalise(" ".join([item.get("source_url", ""), (item.get("evidence") or {}).get("page_title") or "", item.get("quote", "")]))
+    return any(w in hay for w in words) if words else True
+
+
 def find_public_reviews(slug: str) -> dict:
     """One Claude + web search call. Every quote goes through the evidence ledger; quotes without a URL
     (or too long to be verbatim) are dropped. Saved to public_reviews.json."""
@@ -645,6 +657,7 @@ def find_public_reviews(slug: str) -> dict:
     where = profile.get("address") or ", ".join(x for x in (profile.get("area"), profile.get("city")) if x)
     r = llm.claude_call(REVIEWS_PROMPT.format(name=profile["name"], where=where),
                         tools=[llm.web_search_tool(max_uses=5, location=llm.location_for(profile))], max_tokens=6000)
+    r.citations = [c for c in r.citations]  # quotes need quoted text - search-result titles don't count here
     try:
         raw = llm.json_from(r.text or "[]")
     except ValueError:
@@ -658,8 +671,11 @@ def find_public_reviews(slug: str) -> dict:
     items = [{"quote": rec["text"], "rating": x.get("rating"), "date": x.get("date"), "site": x.get("site"),
               "source_url": x["source_url"], "evidence": evidence.badge(rec)}
              for x, rec in zip(usable, recs) if rec["status"] != evidence.REJECTED]
+    off = [x for x in items if not _about(profile, x)]
+    items = [x for x in items if _about(profile, x)]
     data = {"at": time.strftime("%Y-%m-%d %H:%M"), "model": r.model, "cost_usd": round(r.cost_usd, 4), "items": items,
-            "rejected": sum(rec["status"] == evidence.REJECTED for rec in recs), "dropped_no_url": len(raw) - len(usable)}
+            "rejected": sum(rec["status"] == evidence.REJECTED for rec in recs), "dropped_no_url": len(raw) - len(usable),
+            "off_topic": len(off)}
     _write(state_dir(slug) / "public_reviews.json", data)
     return data
 
@@ -677,7 +693,7 @@ def business_value(slug: str) -> dict:
     linked quote each, and one plain sentence of overall sentiment. Unverified/rejected quotes never count."""
     profile = get_profile(slug)
     pub = public_reviews(slug) or {}
-    verified = [x for x in pub.get("items", []) if (x.get("evidence") or {}).get("status") == "verified"]
+    verified = [x for x in pub.get("items", []) if (x.get("evidence") or {}).get("status") == "verified" and _about(profile, x)]
     owner = (load_reviews(restaurant_dir(profile["name"]) / "reviews.json") or {}).get("restaurants", {}).get(profile["name"]) \
         if slug != EXAMPLE_SLUG else None
     texts = [{"rating": _rating(x.get("rating")) or 3, "text": x["quote"], "url": x["source_url"]} for x in verified]

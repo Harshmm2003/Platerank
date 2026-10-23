@@ -306,9 +306,13 @@ def guard_facts(text: str, facts: dict, known_names: list[str] | None = None) ->
     prices |= {float(m["price"]) for m in facts.get("menu_items", [])}
     flagged = []
 
+    def own_name(m) -> bool:  # the match overlaps the restaurant's own name (e.g. "Does Café" in "Does Café Athena")
+        low = m.string.lower()
+        return any(o.start() < m.end() and m.start() < o.end() for n in names if n for o in re.finditer(re.escape(n), low))
+
     def check(pattern, ok):
         def sub(m):
-            if ok(m.group(0)):
+            if ok(m.group(0)) or (pattern is _NAME_RE and own_name(m)):
                 return m.group(0)
             flagged.append(m.group(0))
             return f"{CONFIRM}: {m.group(0)}]"

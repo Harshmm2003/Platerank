@@ -1,0 +1,230 @@
+{
+ "at": "2026-10-23 13:34",
+ "model": "claude-opus-5-5",
+ "cost_usd": 0.1743,
+ "items": [
+  {
+   "quote": "I was absolutely blown away by this place.",
+   "rating": 5,
+   "date": "2026-08-26",
+   "site": "MapQuest (Yelp reviews)",
+   "source_url": "https://www.mapquest.com/us/california/cafe-athena-11266985",
+   "evidence": {
+    "id": "e9cbd552eda8",
+    "status": "unverified",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.mapquest.com/us/california/cafe-athena-11266985",
+    "page_title": "",
+    "check_note": "the page needs a browser to read - open the link to check",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "Cafe Athena has great food and friendly staff.",
+   "rating": null,
+   "date": "May 2026",
+   "site": "Tripadvisor",
+   "source_url": "https://www.tripadvisor.in/Restaurant_Review-g60750-d3461449-Reviews-Cafe_Athena-San_Diego_California.html",
+   "evidence": {
+    "id": "8350cfda14a6",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.tripadvisor.in/Restaurant_Review-g60750-d3461449-Reviews-Cafe_Athena-San_Diego_California.html",
+    "page_title": "CAFE ATHENA, San Diego - Pacific Beach - Restaurant Reviews, Phone ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 403 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "Good food and they don’t skimp on things.",
+   "rating": null,
+   "date": null,
+   "site": "Uber Eats",
+   "source_url": "https://www.ubereats.com/store/cafe-athena-pacific-beach/vw8V20nHTNqwmhpO6E1OIw",
+   "evidence": {
+    "id": "a92e70a148f1",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.ubereats.com/store/cafe-athena-pacific-beach/vw8V20nHTNqwmhpO6E1OIw",
+    "page_title": "Order Cafe Athena (Pacific Beach) - Menu & Prices - San Diego ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 404 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "Underrated underground gem, food 7/10 too",
+   "rating": null,
+   "date": "4mo ago",
+   "site": "Corner",
+   "source_url": "https://www.corner.inc/place/pRspEC4FrxCX",
+   "evidence": {
+    "id": "de72a57f3fcf",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.corner.inc/place/pRspEC4FrxCX",
+    "page_title": "Cafe Athena - 1846 Garnet Ave, San Diego",
+    "check_note": "matched the search engine's citation of this page (the page answered 429 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "The flavor in every dish popped.",
+   "rating": null,
+   "date": null,
+   "site": "HappyCow",
+   "source_url": "https://www.happycow.net/reviews/cafe-athena-san-diego-384800",
+   "evidence": {
+    "id": "81b6335dafa4",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.happycow.net/reviews/cafe-athena-san-diego-384800",
+    "page_title": "Cafe Athena - San Diego California Restaurant - HappyCow",
+    "check_note": "matched the search engine's citation of this page (the page needs a browser to read - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "Seriously the best chicken kabobs ever.",
+   "rating": null,
+   "date": null,
+   "site": "DoorDash",
+   "source_url": "https://www.doordash.com/en-US/store/cafe-athena-san-diego-11713/",
+   "evidence": {
+    "id": "a255471a330c",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.doordash.com/en-US/store/cafe-athena-san-diego-11713/",
+    "page_title": "Order Cafe Athena - San Diego, CA Menu Delivery [Menu & Prices] ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 403 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "Cafe Athena is the best Greek food in SD",
+   "rating": 5,
+   "date": null,
+   "site": "Toast Local",
+   "source_url": "https://toast.app/r/cafe-athena-1846-garnet-ave",
+   "evidence": {
+    "id": "0d1bdeedd797",
+    "status": "unverified",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://toast.app/r/cafe-athena-1846-garnet-ave",
+    "page_title": "",
+    "check_note": "the page answered 403 (blocked or gone) - open the link to check",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "Good food, nice surroundings, excellent service, easy parking.",
+   "rating": null,
+   "date": null,
+   "site": "Tripadvisor",
+   "source_url": "https://www.tripadvisor.com/Restaurant_Review-g60750-d3461449-Reviews-Cafe_Athena-San_Diego_California.html",
+   "evidence": {
+    "id": "782b691fe36e",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.tripadvisor.com/Restaurant_Review-g60750-d3461449-Reviews-Cafe_Athena-San_Diego_California.html",
+    "page_title": "CAFE ATHENA, San Diego - Pacific Beach - Photos & Restaurant Reviews ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 403 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "The service was just fair, even with two servers.",
+   "rating": null,
+   "date": null,
+   "site": "Tripadvisor",
+   "source_url": "https://www.tripadvisor.co.nz/ShowUserReviews-g60750-d3461449-r724772697-Cafe_Athena-San_Diego_California.html",
+   "evidence": {
+    "id": "faec89914ef7",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.tripadvisor.co.nz/ShowUserReviews-g60750-d3461449-r724772697-Cafe_Athena-San_Diego_California.html",
+    "page_title": "Greek food in Pacific Beach - Review of Cafe Athena, San Diego, ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 403 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "The hummus was amazing!",
+   "rating": null,
+   "date": null,
+   "site": "Tripadvisor",
+   "source_url": "https://www.tripadvisor.co.nz/ShowUserReviews-g60750-d3461449-r192240223-Cafe_Athena-San_Diego_California.html",
+   "evidence": {
+    "id": "ed2247a9d817",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.tripadvisor.co.nz/ShowUserReviews-g60750-d3461449-r192240223-Cafe_Athena-San_Diego_California.html",
+    "page_title": "Good Greek restaurant in Pacific Beach - Review of Cafe Athena, ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 403 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "San Diego, unfortunately, has precious few Authentic Greek Cuisine restaurants",
+   "rating": null,
+   "date": null,
+   "site": "Yelp",
+   "source_url": "https://www.yelp.com/search?cflt=greek&find_loc=Pacific+Beach%2C+San+Diego%2C+CA+92109",
+   "evidence": {
+    "id": "2357e11ff5e3",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.yelp.com/search?cflt=greek&find_loc=Pacific+Beach%2C+San+Diego%2C+CA+92109",
+    "page_title": "THE BEST 10 GREEK RESTAURANTS NEAR PACIFIC BEACH, SAN DIEGO, CA ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 403 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "My boyfriend and I ate here for the first time tonight and were blown",
+   "rating": null,
+   "date": null,
+   "site": "Yelp",
+   "source_url": "https://m.yelp.com/biz/cafe-athena-san-diego-4?start=20&ar=1",
+   "evidence": {
+    "id": "462edde70c28",
+    "status": "verified",
+    "tier": "search citation",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://m.yelp.com/biz/cafe-athena-san-diego-4?start=20&ar=1",
+    "page_title": "CAFE ATHENA - Updated June 2026 - 590 Photos & 884 Reviews - 1846 ...",
+    "check_note": "matched the search engine's citation of this page (the page answered 403 (blocked or gone) - open the link to check)",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "quote": "Their Spinach Pastitsio is absolutely sinful.",
+   "rating": null,
+   "date": null,
+   "site": "SanDiegoRestaurants.com",
+   "source_url": "https://www.sandiegorestaurants.com/cafe-athena/",
+   "evidence": {
+    "id": "0ab42256d592",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:34",
+    "source_url": "https://www.sandiegorestaurants.com/cafe-athena/",
+    "page_title": "Cafe Athena Restaurant Info and Reservations",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   }
+  }
+ ],
+ "rejected": 0,
+ "dropped_no_url": 0
+}

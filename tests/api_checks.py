@@ -505,12 +505,12 @@ check("evidence: Sources panel route lists the ledger", ev_api["counts"]["reject
 
 # ---- search-citation tier: llm.py keeps cited_text; a quote in the citation of the SAME url = verified (search citation)
 cit_msg = NS(model="fake", stop_reason="end_turn", content=[NS(type="text", text="ok", citations=[
-              NS(url="https://blocked.example/", title="Blocked", cited_text="Great gyros and super friendly staff, we go every week.")])],
+              NS(url="https://blocked.example/", title="Café Athena reviews", cited_text="Great gyros and super friendly staff, we go every week.")])],
              usage=NS(input_tokens=1, output_tokens=1, cache_read_input_tokens=0, cache_creation_input_tokens=0, server_tool_use=None))
 llm._client = NS(messages=NS(create=lambda **kw: cit_msg))
 os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
 cr = llm.claude_call("hi", model="claude-haiku-5-5", effort=None)
-check("citations: cited_text + url kept from web search citations", cr.citations == [{"url": "https://blocked.example/", "title": "Blocked",
+check("citations: cited_text + url kept from web search citations", cr.citations == [{"url": "https://blocked.example/", "title": "Café Athena reviews",
       "cited_text": "Great gyros and super friendly staff, we go every week."}], cr.citations)
 llm._client = NoRealCalls()
 blk = evidence.verify({"kind": "quote", "text": "great gyros and super friendly staff", "source_url": "https://blocked.example"}, citations=cr.citations)
@@ -532,22 +532,26 @@ check("ai says: labelled as AI quotes, FAILED rows + other restaurants left out"
 check("ai says: on the results 'why' tab", "ai_says" in c.get("/api/restaurants/recheck_cafe/results").json()["why"])
 
 # ---- what people say right now -> evidence ledger -> business value (verified only)
-FAKE_PAGES["https://slow.example/r"] = "timeout"
+FAKE_PAGES["https://slow.example/r/cafe-athena"] = "timeout"
 FAKE_REVIEWS = [
     {"quote": "Cafe Athena’s lamb gyro is the best thing on Garnet", "rating": "5", "date": "Sep 2026", "source_url": "https://cafeathena.com", "site": "Blog"},
     {"quote": "Great gyros and super friendly staff", "rating": 5, "source_url": "https://blocked.example", "site": "Yelp"},
     {"quote": "Rude staff and totally overpriced, never again", "rating": 1, "source_url": "https://cafeathena.com", "site": "Reddit"},
-    {"quote": "Slow service and bland food tonight", "rating": 2, "source_url": "https://slow.example/r", "site": "TripAdvisor"},
+    {"quote": "Slow service and bland food tonight", "rating": 2, "source_url": "https://slow.example/r/cafe-athena", "site": "TripAdvisor"},
     {"quote": "Loved the happy hour", "rating": 5, "source_url": "", "site": "Google"},
-    {"quote": " ".join(["word"] * 45), "source_url": "https://cafeathena.com"}]
+    {"quote": " ".join(["word"] * 45), "source_url": "https://cafeathena.com"},
+    {"quote": "Olive Tree Taverna and Athens Market are favourites", "source_url": "https://other.example/list", "site": "Blog"}]  # on its page, but not about us
 llm.claude_call = lambda *a, **k: llm.ClaudeResult(text=json.dumps(FAKE_REVIEWS), model="fake", citations=cr.citations)
 os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
-ps = c.post("/api/restaurants/check_diner/people-say/search").json()
+c.put("/api/restaurants", json={"profile": {"name": "Cafe Athena Test", "cuisine": "Greek", "area": "Harbor Point", "competitors": [{"name": "Other Place"}]}})
+ps = c.post("/api/restaurants/cafe_athena_test/people-say/search").json()
 st = {x["quote"][:12]: x["evidence"]["status"] for x in ps["saved"]["items"]}
 check("people say: page-verified + citation-verified kept, unverified greyed", st == {"Cafe Athena’": "verified", "Great gyros ": "verified",
       "Slow service": "unverified"}, st)
 check("people say: rejected counted, no-URL + too-long dropped", ps["saved"]["rejected"] == 1 and ps["saved"]["dropped_no_url"] == 2, ps["saved"])
-check("people say: saved to public_reviews.json", (tmp / "live" / "check_diner" / "public_reviews.json").exists())
+check("people say: a quote that isn't about this restaurant is dropped (off-topic)", ps["saved"]["off_topic"] == 1
+      and not any("Olive Tree" in x["quote"] for x in ps["saved"]["items"]), ps["saved"].get("off_topic"))
+check("people say: saved to public_reviews.json", (tmp / "live" / "cafe_athena_test" / "public_reviews.json").exists())
 bv = ps["business_value"]
 check("business value: only the 2 verified quotes counted", bv["ready"] and bv["counts"]["verified_quotes"] == 2, bv.get("counts"))
 check("business value: rejected + unverified complaints never feed the scores",
@@ -555,9 +559,9 @@ check("business value: rejected + unverified complaints never feed the scores",
 check("business value: no complaints -> 'Doing well'", bv["aspects"]["service"]["status"] == "Doing well - no complaints found", bv["aspects"]["service"])
 check("business value: one plain sentiment sentence", bv["sentiment"].startswith("Mostly positive") and "2 verified web quotes" in bv["sentiment"], bv["sentiment"])
 check("people say: sample can't search the web", c.post("/api/restaurants/example/people-say/search").status_code == 400)
-c.post("/api/restaurants/check_diner/reviews", json={"restaurant": "Check Diner", "avg_rating": 3, "source": "Google Maps",
+c.post("/api/restaurants/cafe_athena_test/reviews", json={"restaurant": "Cafe Athena Test", "avg_rating": 3, "source": "Google Maps",
                                                       "text": "2 | The price is too much for small portions."})
-bv2 = c.get("/api/restaurants/check_diner/people-say").json()["business_value"]
+bv2 = c.get("/api/restaurants/cafe_athena_test/people-say").json()["business_value"]
 check("business value: owner-pasted reviews added + complaint becomes an action with its quote",
       bv2["counts"]["owner_reviews"] == 1 and bv2["aspects"]["price_value"]["negative"] >= 1 and bv2["actions"][0]["quote"] and "low evidence" in bv2["actions"][0]["evidence"], bv2)
 llm.claude_call = real_call
@@ -747,6 +751,25 @@ check("todo: done tick saved", next(x for x in c.get("/api/restaurants/recheck_c
 nr2 = c.get("/api/restaurants/check_diner/results").json()
 check("todo + headlines also before the first check", set(nr2["headlines"]) == TAB_KEYS and "hasn't been checked yet" in nr2["headlines"]["rank"]
       and isinstance(nr2["todo"], list), nr2["headlines"]["rank"])
+
+# ---- fixes from the live run (Oct 23): Reddit/TikTok need a browser, so "this page exists" can come from the search results
+sr = llm.ClaudeResult(text="", model="fake", sources=[{"url": "https://www.reddit.com/r/pacificbeach/comments/x1/best_greek/", "title": "Best Greek? : r/pacificbeach"},
+                                                     {"url": "https://www.tiktok.com/@pbeats", "title": "PB Eats (@pbeats) | TikTok"}])
+cites = evidence.search_citations(sr)
+sub = evidence.verify({"kind": "subreddit", "text": "pacificbeach", "source_url": "https://www.reddit.com/r/pacificbeach/"}, citations=cites, get=lambda *a, **k: FakePage("<div id=app></div>"))
+check("live fix: subreddit confirmed by a search result inside it (page needs a browser)", sub["status"] == "verified" and sub["tier"] == "search result", sub)
+check("live fix: a different subreddit isn't confirmed by it", evidence.verify({"kind": "subreddit", "text": "sandiego", "source_url": "https://www.reddit.com/r/sandiego/"},
+      citations=cites, get=lambda *a, **k: FakePage("<div id=app></div>"))["status"] == "unverified")
+prof = evidence.verify({"kind": "profile", "text": "PB Eats", "source_url": "https://www.tiktok.com/@pbeats"}, citations=cites, get=lambda *a, **k: FakePage("x", status=403))
+check("live fix: creator profile confirmed when the search returned that exact link", prof["status"] == "verified" and prof["tier"] == "search result", prof)
+q = evidence.verify({"kind": "quote", "text": "Best Greek?", "source_url": "https://www.reddit.com/r/pacificbeach/comments/x1/best_greek/"}, citations=cites,
+                    get=lambda *a, **k: FakePage("x", status=403))
+check("live fix: a search-result title never verifies a quote", q["status"] == "unverified", q)
+g, gf = cg.guard_facts("Does Café Athena have a happy hour? Ask Athens Taverna.", {"name": "Café Athena", "other_names": ["Cafe Athena"]})
+check("live fix: the restaurant's own name isn't flagged ('Does Café Athena'), other names still are", "Does Café Athena" in g and gf == ["Athens Taverna"], (g, gf))
+from platerank import reddit as _rd
+check("live fix: thread search suggests site:reddit.com searches; creators search YouTube first",
+      "site:reddit.com" in _rd.THREADS_PROMPT and "'youtube {cuisine} food {city}'" in creators_mod.FIND_PROMPT)
 
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
