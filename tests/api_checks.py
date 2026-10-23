@@ -561,6 +561,55 @@ check("business value: owner-pasted reviews added + complaint becomes an action 
 llm.claude_call = real_call
 del os.environ["ANTHROPIC_API_KEY"]
 
+# ---- food words: built-in dish words + the restaurant's own dishes / cuisine
+from platerank import reviews_vfm as rv
+fw = rv.food_words({"cuisine": "Greek", "cuisine_alternates": ["Mediterranean"], "signature_terms": ["Loukoumades with honey"]})
+check("food words: from the profile (cuisine, alternates, signature dishes)", {"greek", "mediterranean", "loukoumades with honey", "loukoumades"} <= set(fw), fw)
+check("food words: built-in dish words count as food (gyro, souvlaki)", rv.aspect_analysis([{"rating": 5, "text": "The souvlaki was amazing."}])["food"]["mentions"] == 1)
+check("food words: the restaurant's own dish counts only when passed in",
+      rv.aspect_analysis([{"rating": 5, "text": "Loukoumades were perfect."}])["food"]["mentions"] == 0
+      and rv.aspect_analysis([{"rating": 5, "text": "Loukoumades were perfect."}], fw)["food"]["mentions"] == 1)
+
+# ---- housekeeping: what the site says now vs proposed, reminders, PDF, social hygiene
+FAKE_PAGES["https://taverna.example"] = FakePage('<html><head><title>Test Taverna | Greek in Harbor Point</title>'
+    '<meta name="description" content="Greek food by the harbor."><script type="application/ld+json">{"@context":"https://schema.org",'
+    '"@type":"Restaurant","name":"Test Taverna","telephone":"555-0100"}</script></head><body><h1>Test Taverna</h1>'
+    '<a href="/menu.pdf">Our Menu</a><h2>About us</h2><p>Family recipes from Crete, served at 12 Ocean Ave.</p>' + FILLER + '</body></html>')
+sn = c.post("/api/restaurants/test_taverna/site-now").json()
+check("site now: one page read, real text per piece", sn["ok"] and '"telephone": "555-0100"' in sn["pieces"]["pack_restaurant_schema"]["text"]
+      and "Family recipes from Crete" in sn["pieces"]["pack_about"]["text"] and "/menu.pdf" in sn["pieces"]["pack_menu_copy"]["text"], sn["pieces"].keys())
+check("site now: missing pieces said plainly", sn["pieces"]["pack_faq_schema"] == {"text": "No FAQ schema on the homepage.", "found": False, "evidence": None})
+check("site now: page text carries a verified (page fetch) badge + is in the ledger", sn["pieces"]["pack_about"]["evidence"]["tier"] == "page fetch"
+      and any(e["subject"].startswith("your site now") for e in evidence.load("test_taverna")))
+check("site now: shown in 'Make the changes'", c.get("/api/restaurants/test_taverna/results").json()["make"]["housekeeping"]["site_now"]["ok"])
+c.put("/api/restaurants", json={"profile": {"name": "Check Diner", "cuisine": "diner", "area": "Union Square", "website": "https://blocked.example"},
+                                "previous_slug": "check_diner"})
+snb = c.post("/api/restaurants/check_diner/site-now").json()
+check("site now: site can't be read -> said plainly", snb["ok"] is False and "403" in snb["note"] and "Open it yourself" in snb["note"], snb)
+c.post("/api/restaurants/test_taverna/remind", json={"key": "pack_about"})
+rem = c.get("/api/restaurants/test_taverna/results").json()["make"]["housekeeping"]["reminders"]
+check("remind me later: hidden for 24h, saved", rem.get("pack_about", 0) > time.time() + 23.5 * 3600, rem)
+c.post("/api/restaurants/test_taverna/remind", json={"key": "pack_about", "undo": True})
+check("remind me later: bring back", "pack_about" not in c.get("/api/restaurants/test_taverna/results").json()["make"]["housekeeping"]["reminders"])
+check("pdf: not approved -> plain 400", c.get("/api/restaurants/test_taverna/pdf/pack_about").status_code == 400)
+c.post("/api/restaurants/test_taverna/approve", json={"key": "pack_about", "text": "Café Athena – “family recipes” since 1990.\n\nSecond paragraph…"})
+pdf = c.get("/api/restaurants/test_taverna/pdf/pack_about")
+from pypdf import PdfReader
+ptxt = PdfReader(io.BytesIO(pdf.content)).pages[0].extract_text() if pdf.status_code == 200 else ""
+check("pdf: approved text only, accents kept, quotes/dashes made printable", pdf.content[:4] == b"%PDF" and "Café Athena - \"family recipes\" since 1990." in ptxt
+      and "Second paragraph..." in ptxt, ptxt[:200])
+c.post("/api/restaurants/test_taverna/approve", json={"key": "pack_landing", "text": "<html><body><h1>Greek food</h1><p>Fish &amp; chips</p><script>x()</script></body></html>"})
+lt = PdfReader(io.BytesIO(c.get("/api/restaurants/test_taverna/pdf/pack_landing").content)).pages[0].extract_text()
+check("pdf: local page printed as text, not HTML", "Fish & chips" in lt and "<p>" not in lt and "x()" not in lt, lt[:200])
+c.post("/api/restaurants/test_taverna/approve", json={"key": "pack_menu_copy", "text": "Moussaka - layers"})
+check("pdf: menu only if we hold dishes", c.get("/api/restaurants/test_taverna/pdf/pack_menu_copy").status_code == 400)
+soc = pipeline.social_hygiene(pipeline.get_profile("test_taverna"), ["late-night", "date-night", "happy-hour"])
+check("social: hashtags from the profile + lost question types", {"#HarborPoint", "#HP", "#GreekFoodSpringfield", "#HPHappyHour", "#GlutenFreeSpringfield",
+      "#HPDateNight", "#SpringfieldCatering", "#SpringfieldPrivateEvents"} <= set(soc["hashtags"]), soc["hashtags"])
+check("social: no hashtag for something the profile doesn't offer (late-night)", not any("Late" in t for t in soc["hashtags"]), soc["hashtags"])
+check("social: checklist uses the saved facts", any("12 Ocean Ave" in x for x in soc["checklist"]) and any(HOURS in x for x in soc["checklist"]), soc["checklist"])
+check("social: keywords from the profile", "Greek restaurant Harbor Point" in soc["keywords"] and "happy hour HP" in soc["keywords"], soc["keywords"])
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")

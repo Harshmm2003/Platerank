@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { AiQuote, api, ApiError, Evidence, PeopleSay, pct, PackPiece, Results as R } from "./api";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { AiQuote, api, ApiError, Evidence, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
 import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
@@ -43,7 +43,7 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
         </div>
       </div>
 
-      <TabNav slug={slug} tab={tab} />
+      <TabNav slug={slug} tab={tab} reminders={activeReminders(r)} />
 
       {r.empty ? <Card>No answers came back in the last check, so there's nothing to score. Try again in a few minutes.</Card> :
         tab === "why" ? <Why r={r} reload={load} /> :
@@ -55,13 +55,14 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
   );
 }
 
-function TabNav({ slug, tab }: { slug: string; tab: string }) {
+function TabNav({ slug, tab, reminders = 0 }: { slug: string; tab: string; reminders?: number }) {
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-stone-200">
       {TABS.map(([key, n, label]) => (
         <a key={key} href={`#/r/${slug}/results/${key}`}
           className={cx("whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium", tab === key ? "border-brand-600 text-brand-700" : "border-transparent text-stone-500 hover:text-stone-800")}>
           <span className="mr-1 text-xs text-stone-400">{n}</span>{label}
+          {key === "make" && reminders > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">Reminders ({reminders})</span>}
         </a>
       ))}
     </nav>
@@ -83,7 +84,7 @@ function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () =>
           {!r.is_sample && <Button kind="ghost" onClick={() => go(`/r/${r.slug}/setup/1`)}>Edit setup</Button>}
         </div>
       </div>
-      <TabNav slug={r.slug} tab={active} />
+      <TabNav slug={r.slug} tab={active} reminders={activeReminders(r)} />
       {active === "make" ? <Make r={r} reload={reload} /> : active === "change" ? <PeopleSaySection slug={r.slug} /> : (
         <Card>
           <p className="text-stone-700">Run a check first - this answer comes from asking AI assistants the questions your customers ask.</p>
@@ -390,22 +391,45 @@ function ReviewsForm({ r, reload }: { r: R; reload: () => void }) {
 function Draft({ r, k, title, kind, text: initial, reload, strict, note, file }: { r: R; k: string; title: string; kind: "text" | "code" | "json";
   text: string; reload: () => void; strict?: boolean; note?: string; file?: string }) {
   const approved = r.approvals[k];
+  const hk = useContext(HK);
   const [text, setText] = useState(approved?.text || initial);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hidden = !!hk && (hk.reminders[k] || 0) > Date.now() / 1000;
+  async function remind(undo = false) {
+    setBusy(true); setError(null);
+    try { await api.post(`/api/restaurants/${r.slug}/remind`, { key: k, undo }); reload(); } catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
   async function approve(undo = false) {
     setBusy(true); setError(null);
     try { await api.post(`/api/restaurants/${r.slug}/approve`, { key: k, text, undo }); reload(); } catch (e) { setError((e as Error).message); }
     setBusy(false);
   }
   const blocked = !text.trim() || text.includes("OWNER TO CONFIRM") || (kind === "json" && !validJson(text));
+  if (hidden && !hk?.showHidden) return null;
+  const now = hk?.now?.pieces?.[k];
   return (
-    <Card>
+    <Card className={hidden ? "opacity-70" : undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold">{title}</h3>
         {approved ? <Badge kind="LIVE">approved {approved.at}</Badge> : <Badge kind="neutral">draft</Badge>}
       </div>
-      <textarea className={cx(inputCls, "mt-3 h-48 text-sm", kind === "code" && "font-mono")} value={text} readOnly={!!approved} onChange={(e) => setText(e.target.value)} />
+      {hidden && <p className="mt-1 text-xs text-amber-800">Reminder set - hidden until {new Date((hk!.reminders[k]) * 1000).toLocaleString()}.</p>}
+      {hk?.now && (now || !hk.now.ok) && (
+        <div className="mt-3 rounded-lg bg-stone-50 p-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-stone-600">
+            <span>Now on your website</span>
+            {now?.evidence ? <EvidenceBadge ev={now.evidence} /> : hk.now.url && <a className="text-sky-700" href={hk.now.url} target="_blank" rel="noreferrer">{hk.now.url} ↗</a>}
+          </div>
+          <div className={cx("mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-xs", now?.found ? "text-stone-700" : "text-stone-500 italic")}>
+            {now ? now.text : hk.now.note}</div>
+        </div>
+      )}
+      <div className="mt-3 text-xs font-semibold text-stone-600">{hk?.now ? "Proposed" : ""}</div>
+      <textarea className={cx(inputCls, "mt-1 h-48 text-sm", kind === "code" && "font-mono", !editing && !approved && "bg-stone-50")} value={text}
+        readOnly={!!approved || !editing} onChange={(e) => setText(e.target.value)} />
       {note && <p className="mt-1 text-xs text-stone-500">{note}</p>}
       {text.includes("OWNER TO CONFIRM") && <p className="mt-1 text-xs text-amber-800">Fill in each [OWNER TO CONFIRM] before approving — we don't guess facts.</p>}
       {strict && kind === "json" && text.trim() && !validJson(text) && <p className="mt-1 text-xs text-red-700">This isn't valid JSON any more — check the last edit.</p>}
@@ -414,6 +438,11 @@ function Draft({ r, k, title, kind, text: initial, reload, strict, note, file }:
         {approved ? <Button kind="secondary" small busy={busy} onClick={() => approve(true)}>Undo approval</Button>
           : <Button small busy={busy} onClick={() => approve()} disabled={strict && blocked}
               title={strict && blocked ? "Fill in or delete every [OWNER TO CONFIRM] part first" : ""}>✓ Approve</Button>}
+        {!approved && <Button small kind="secondary" onClick={() => setEditing(!editing)}>{editing ? "Done editing" : "✎ Make changes"}</Button>}
+        {!approved && hk && (hidden ? <Button small kind="ghost" busy={busy} onClick={() => remind(true)}>Bring back</Button>
+          : <Button small kind="ghost" busy={busy} onClick={() => remind()}>⏰ Remind me later</Button>)}
+        {approved && hk?.pdf_keys.includes(k) && <Button small kind="secondary" busy={busy} onClick={async () => {
+          setBusy(true); setError(await downloadUrl(`/api/restaurants/${r.slug}/pdf/${k}`, `${r.slug}-${k}.pdf`)); setBusy(false); }}>⬇ Download PDF</Button>}
         <Button kind="ghost" small onClick={() => copy(text)}>Copy</Button>
         <Button kind="ghost" small disabled={!text.trim()} onClick={() => download(file || `${k}.txt`, text)}>Download</Button>
         {k.startsWith("outreach") && (r.mailto?.[k]
@@ -427,12 +456,38 @@ function Draft({ r, k, title, kind, text: initial, reload, strict, note, file }:
 
 function Make({ r, reload }: { r: R; reload: () => void }) {
   const m = r.make;
+  const hk = m.housekeeping;
+  const [showHidden, setShowHidden] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const nRem = activeReminders(r);
+  async function readSite() {
+    setBusy(true); setError(null);
+    try { await api.post(`/api/restaurants/${r.slug}/site-now`); reload(); } catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
   return (
+    <HK.Provider value={hk ? { reminders: hk.reminders, showHidden, now: hk.site_now, pdf_keys: hk.pdf_keys } : null}>
     <div className="space-y-5">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Housekeeping: your website now vs what we propose</h3>
+            <p className="text-sm text-stone-500">{hk?.site_now ? (hk.site_now.ok ? `Read ${hk.site_now.url} at ${hk.site_now.at}.` : hk.site_now.note)
+              : "Read your homepage once (free) to see what it says today next to each draft."}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {nRem > 0 && <span className="text-sm text-amber-800">Reminders ({nRem}) · <button className="cursor-pointer underline" onClick={() => setShowHidden(!showHidden)}>{showHidden ? "hide" : "show"}</button></span>}
+            {!r.is_sample && <Button small kind="secondary" busy={busy} onClick={readSite}>{hk?.site_now ? "Read my website again" : "Read my current website"}</Button>}
+          </div>
+        </div>
+        <ErrorNote error={error} />
+      </Card>
       <div className="grid gap-5 lg:grid-cols-2">
         {m.drafts.map((d) => <Draft key={d.key} r={r} k={d.key} title={d.title} kind={d.kind} text={d.text} reload={reload} />)}
       </div>
       <ContentPackSection r={r} reload={reload} />
+      {hk && <SocialCard s={hk.social} />}
       <Card>
         <h3 className="font-semibold">Food creators to work with</h3>
         <p className="text-sm text-stone-500">{m.creators_note} YouTube counts most: AI assistants read and cite it.</p>
@@ -456,6 +511,7 @@ function Make({ r, reload }: { r: R; reload: () => void }) {
         </div>
       ))}
     </div>
+    </HK.Provider>
   );
 }
 
@@ -730,5 +786,39 @@ function PeopleSaySection({ slug }: { slug: string }) {
         </>}
       </Card>
     </div>
+  );
+}
+
+type HKState = { reminders: Record<string, number>; showHidden: boolean; now: Housekeeping["site_now"]; pdf_keys: string[] } | null;
+const HK = createContext<HKState>(null);
+const activeReminders = (r: R) => Object.values(r.make?.housekeeping?.reminders || {}).filter((t) => t > Date.now() / 1000).length;
+
+async function downloadUrl(url: string, name: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return (await res.json().catch(() => ({}))).detail || "Couldn't build the download.";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return null;
+  } catch { return "Can't reach PlateRank. Is the terminal running `python run.py` still open?"; }
+}
+
+/** Hashtags + keywords from the profile and the question types being lost, plus a consistency checklist. */
+function SocialCard({ s }: { s: Housekeeping["social"] }) {
+  return (
+    <Card>
+      <h3 className="font-semibold">Social media hygiene</h3>
+      <p className="text-sm text-stone-500">{s.note}</p>
+      <div className="mt-3 flex flex-wrap gap-1.5">{s.hashtags.map((t) => <span key={t} className="rounded-full bg-sky-50 px-2 py-0.5 text-sm text-sky-800">{t}</span>)}</div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button small kind="ghost" onClick={() => copy(s.hashtags.join(" "))}>Copy hashtags</Button>
+        <Button small kind="ghost" onClick={() => copy(s.keywords.join("\n"))}>Copy search keywords</Button>
+      </div>
+      <p className="mt-2 text-xs text-stone-500">Search keywords to use in bios, captions and video titles: {s.keywords.join(" · ")}</p>
+      <ul className="mt-3 space-y-1 text-sm">{s.checklist.map((c) => <li key={c}>☐ {c}</li>)}</ul>
+    </Card>
   );
 }

@@ -20,7 +20,7 @@ from .analysis import scorecard, by_category, by_dimension, competitor_frequency
 from .scrape import audit_website, diagnose
 from .sources_audit import audit_sources, prioritized_gaps, load_demo_sources, load_sources, save_sources
 from .reviews_vfm import (load_demo as load_reviews_demo, load_reviews, analyse_restaurant, area_benchmark,
-                          benchmark_label, price_scenario)
+                          benchmark_label, price_scenario, food_words)
 from .creators import load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places
 from .content_gen import faq_page, outreach_email
 from . import content_gen
@@ -473,7 +473,8 @@ def make_before_run(slug: str) -> dict | None:
                                 {"key": "outreach_email", "title": "Pitch to local food writers", "kind": "text",
                                  "text": outreach_email(profile)}],
                      "creators": [], "creators_note": "Run a check first - creator matches use the question types you're losing.",
-                     "pack": content_pack_view(slug, profile, t_site, None, faq_text)}}
+                     "pack": content_pack_view(slug, profile, t_site, None, faq_text),
+                     "housekeeping": _housekeeping(slug, profile, [])}}
 
 
 # ------------------------------------------------------------------ qualitative: what AI says / what people say
@@ -577,7 +578,8 @@ def business_value(slug: str) -> dict:
     avg = (owner or {}).get("avg_rating") or (round(sum(seen_r) / len(seen_r), 2) if seen_r else 0)
     a = analyse_restaurant(profile["name"], {"avg_rating": avg, "review_count": len(texts), "price_level": profile.get("price_level"),
                                              "reviews": [{"rating": t["rating"], "text": t["text"]} for t in texts]},
-                           profile.get("menu", {}), {"entree_avg": None, "entree_n": 0}, 0.0, None, profile.get("anchor_item") or "everyday item")
+                           profile.get("menu", {}), {"entree_avg": None, "entree_n": 0}, 0.0, None, profile.get("anchor_item") or "everyday item",
+                           food_words(profile))
     link = lambda q: next((t["url"] for t in texts if q and (q[:60].lower() in t["text"].lower() or t["text"][:60].lower() in q.lower())), None)
     actions = [{"category": rec["area"], "action": rec["recommendation"], "evidence": rec["evidence"],
                 "quote": rec.get("example_quote"), "source_url": link(rec.get("example_quote"))}
@@ -610,6 +612,195 @@ def business_value(slug: str) -> dict:
 def people_say(slug: str) -> dict:
     pub = public_reviews(slug)
     return {"saved": pub, "business_value": business_value(slug), "can_search": slug != EXAMPLE_SLUG and llm.has_key()}
+
+
+# ------------------------------------------------------------------ housekeeping: site now vs proposed, reminders, PDF, social
+_LD_RE = re.compile(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', re.I | re.S)
+
+
+def _ld_blocks(raw_html: str) -> list[dict]:
+    out = []
+    for m in _LD_RE.finditer(raw_html or ""):
+        try:
+            d = json.loads(m.group(1).strip())
+        except ValueError:
+            continue
+        for x in (d if isinstance(d, list) else d.get("@graph", [d]) if isinstance(d, dict) else []):
+            if isinstance(x, dict):
+                out.append(x)
+    return out
+
+
+def _around(text: str, word: str, n: int = 500) -> str | None:
+    i = text.lower().find(word)
+    return text[max(0, i - 40): i + n].strip() if i >= 0 else None
+
+
+def read_site_now(slug: str) -> dict:
+    """ONE fetch of the restaurant's own homepage: what each website piece looks like today (real text, with URL)."""
+    from . import evidence
+    profile = get_profile(slug)
+    url = profile.get("website") or ""
+    now = {"at": time.strftime("%Y-%m-%d %H:%M"), "url": url, "ok": False, "pieces": {}}
+    if not url:
+        now["note"] = "No website saved for this restaurant - add it in Setup to compare."
+        _write(state_dir(slug) / "site_now.json", now)
+        return now
+    page, why = evidence.fetch_page(url)
+    if page is None:
+        now["note"] = f"Couldn't read {url}: {why}. Open it yourself to compare."
+        _write(state_dir(slug) / "site_now.json", now)
+        return now
+    lds, text = _ld_blocks(page["html"]), page["text"]
+    typed = lambda *ts: next((d for d in lds if str(d.get("@type")) in ts), None)
+    dumps = lambda d: json.dumps(d, indent=2, ensure_ascii=False)[:1500]
+    desc = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']*)', page["html"], re.I)
+    menu_a = re.search(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>([^<]*menu[^<]*)</a>', page["html"], re.I)
+    rest, faq, menu = typed("Restaurant", "FoodEstablishment"), typed("FAQPage"), typed("Menu")
+    faq_text = dumps(faq) if faq else _around(text, "faq") or _around(text, "frequently asked")
+    found = {
+        "pack_restaurant_schema": dumps(rest) if rest else None,
+        "pack_faq_schema": dumps(faq) if faq else None,
+        "faq_page": faq_text,
+        "pack_menu_schema": dumps(menu) if menu else None,
+        "pack_menu_copy": f"Menu link on the homepage: “{menu_a.group(2).strip()}” → {menu_a.group(1)}" if menu_a else None,
+        "pack_about": _around(text, "about us") or _around(text, "our story") or text[:600] or None,
+        "pack_landing": f"Page title: {page['title'] or '(none)'}\nDescription: {desc.group(1) if desc else '(none)'}\n"
+                        f"{len(text.split())} words of readable text on the homepage.",
+    }
+    missing = {"pack_restaurant_schema": "No Restaurant schema on the homepage.", "pack_faq_schema": "No FAQ schema on the homepage.",
+               "faq_page": "No FAQ on the homepage.", "pack_menu_schema": "No Menu schema on the homepage.",
+               "pack_menu_copy": "No menu link found on the homepage.", "pack_about": "No readable text on the homepage."}
+    recs = evidence.record_direct(slug, [{"kind": "quote", "text": v[:300], "source_url": url, "page_title": page["title"],
+                                          "subject": f"your site now: {PACK_TITLES.get(k, 'FAQ page')}"} for k, v in found.items() if v])
+    by_key = dict(zip([k for k, v in found.items() if v], recs))
+    now.update(ok=True, title=page["title"], pieces={
+        k: {"text": v or missing[k], "found": bool(v), "evidence": evidence.badge(by_key[k]) if k in by_key else None}
+        for k, v in found.items()})
+    _write(state_dir(slug) / "site_now.json", now)
+    return now
+
+
+def remind_later(slug: str, key: str, hours: float = 24, undo: bool = False) -> dict:
+    path = state_dir(slug) / "reminders.json"
+    data = _read(path, {})
+    if undo:
+        data.pop(key, None)
+    else:
+        data[key] = time.time() + hours * 3600
+    _write(path, data)
+    return data
+
+
+PDF_PIECES = {"faq_page": "FAQ", "pack_about": "About us", "pack_landing": "Local page", "pack_menu_copy": "Menu"}
+
+
+def _pdf_text(s: str) -> str:
+    """Core PDF fonts are Latin-1: straighten quotes/dashes, keep accents (é), replace the rest."""
+    for a, b in {"‘": "'", "’": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...",
+                 "→": "->", "•": "-", " ": " "}.items():
+        s = s.replace(a, b)
+    return s.encode("latin-1", "replace").decode("latin-1")
+
+
+def _html_lines(html_text: str) -> str:
+    import html as _h
+    t = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html_text, flags=re.S | re.I)
+    t = re.sub(r"</(h1|h2|h3|p|li|title)>", "\n", t, flags=re.I)
+    t = re.sub(r"<li[^>]*>", "- ", t, flags=re.I)
+    t = _h.unescape(re.sub(r"<[^>]+>", "", t))
+    return "\n".join(l.strip() for l in t.splitlines() if l.strip())
+
+
+def piece_pdf(slug: str, key: str) -> bytes:
+    """PDF of ONE approved piece (the approved text, never the unapproved draft)."""
+    from fpdf import FPDF
+    if key not in PDF_PIECES:
+        raise ValueError("PDF download is for the FAQ, About us, local page and menu text.")
+    profile = get_profile(slug)
+    approved = _read(state_dir(slug) / "approved.json", {}).get(key)
+    if not approved:
+        raise ValueError("Approve this piece first - the PDF only contains approved text.")
+    if key == "pack_menu_copy" and not content_gen.menu_items(profile):
+        raise ValueError("No dishes saved yet, so there's no menu text to print.")
+    body = _html_lines(approved["text"]) if key == "pack_landing" else approved["text"]
+    pdf = FPDF(format="Letter")
+    pdf.set_auto_page_break(True, margin=18)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.multi_cell(0, 9, _pdf_text(f"{profile['name']} - {PDF_PIECES[key]}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 11)
+    pdf.ln(2)
+    for para in body.split("\n"):
+        pdf.multi_cell(0, 6, _pdf_text(para) if para.strip() else " ", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.ln(4)
+    pdf.multi_cell(0, 5, _pdf_text(f"Approved {approved['at']} - prepared with PlateRank from the restaurant's own facts."), new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())
+
+
+def _tag(*words) -> str:
+    """('PB', 'HappyHour') -> #PBHappyHour; ('pacific beach',) -> #PacificBeach (existing capitals are kept)."""
+    parts = [p_ for w in words if w for p_ in re.split(r"[\s-]+", w) if p_]
+    return "#" + "".join(re.sub(r"[^A-Za-z0-9]", "", p_ if any(ch.isupper() for ch in p_) else p_.capitalize()) for p_ in parts)
+
+
+def social_hygiene(profile: dict, lost_categories: list[str], site_now: dict | None = None,
+                   review_sites: list[str] | None = None) -> dict:
+    """Hashtags + search keywords from the profile and the question types it is losing, and a consistency
+    checklist. Facts only: a hashtag is only suggested for something the profile says the place offers."""
+    import unicodedata
+    plain = lambda s: "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
+    name, cuisine, area = profile["name"], profile["cuisine"], profile["area"]
+    city, hood = profile.get("city") or "", profile.get("neighbourhood") or area
+    nick = (profile.get("area_nicknames") or [None])[0]
+    place = nick or area
+    hl = " ".join(profile.get("highlights") or []).lower()
+    tags = [_tag(plain(area)), _tag(nick) if nick else None, _tag(plain(cuisine), "Food", plain(city)), _tag(plain(city), "Eats")]
+    tags += [_tag(plain(a), plain(city)) for a in profile.get("cuisine_alternates") or []]
+    if "happy hour" in hl: tags.append(_tag(place, "HappyHour"))
+    if re.search(r"cocktail|bar\b|wine|beer", hl): tags.append(_tag(place, "Cocktails"))
+    for d in ("gluten-free", "vegan", "vegetarian"):
+        if d.split("-")[0] in hl: tags.append(_tag(d.replace("-", " "), plain(city)))
+    if "cater" in hl: tags.append(_tag(plain(city), "Catering"))
+    if re.search(r"private|event", hl): tags.append(_tag(plain(city), "PrivateEvents"))
+    lost_tags = {"date-night": (place, "DateNight"), "lunch": (place, "Lunch"), "group": (plain(city), "GroupDining"),
+                 "happy-hour": (place, "HappyHour"), "drinks": (place, "Cocktails"), "events": (plain(city), "PrivateEvents")}
+    for c in lost_categories:
+        if c in lost_tags and (c not in ("happy-hour", "drinks", "events") or c.replace("-", " ") in hl or c == "events" and re.search(r"private|event|cater", hl)
+                               or c == "drinks" and re.search(r"cocktail|bar\b|wine|beer", hl)):
+            tags.append(_tag(*lost_tags[c]))
+    tags = list(dict.fromkeys(t for t in tags if t and len(t) > 2))
+    street = content_gen._split_address(profile.get("address") or "").get("streetAddress", "")
+    street = re.sub(r"^\d+\s+", "", street) if street else ""
+    kw = [f"{cuisine} restaurant {hood}", f"{cuisine} food {city}".strip()]
+    kw += [f"{a} food {hood}" for a in profile.get("cuisine_alternates") or []]
+    kw += [f"{cuisine} near {street}"] if street else []
+    kw += [f"happy hour {place}"] if "happy hour" in hl else []
+    kw += [f"{d} {cuisine} {city}".strip() for d in ("gluten-free", "vegan", "vegetarian") if d.split("-")[0] in hl]
+    kw += [f"{cuisine} catering {city}".strip()] if "cater" in hl else []
+    confirm = content_gen._confirm
+    menu_link = ((site_now or {}).get("pieces", {}).get("pack_menu_copy", {}) or {}).get("text", "")
+    m = re.search(r"→\s*(\S+)", menu_link)
+    checklist = [
+        f"Use exactly this name on every profile: “{name}”" + (f" (people also write {', '.join(profile.get('aliases') or [])})" if profile.get("aliases") else ""),
+        f"Same address everywhere: {profile.get('address') or confirm('street address')}",
+        f"Same hours everywhere: {profile.get('hours') or confirm('opening hours')}",
+        f"Menu link in every bio: {(m.group(1) if m else None) or profile.get('website') or confirm('menu link')}",
+        "Reply to recent reviews" + (f" - we found verified ones on {', '.join(review_sites)}" if review_sites else "") + ".",
+        ("Name your dishes in captions: " + ", ".join(profile["signature_terms"][:5])) if profile.get("signature_terms")
+        else "Name your dishes in captions - " + confirm("the dishes you're known for"),
+    ]
+    return {"hashtags": tags[:12], "keywords": list(dict.fromkeys(kw))[:8], "checklist": checklist,
+            "note": "Instagram and TikTok bring reach; AI assistants mostly cite reviews, YouTube, listicles and Reddit."}
+
+
+def _housekeeping(slug: str, profile: dict, lost_categories: list[str]) -> dict:
+    now = _read(state_dir(slug) / "site_now.json", None)
+    pub = public_reviews(slug) or {}
+    sites = sorted({x.get("site") for x in pub.get("items", []) if (x.get("evidence") or {}).get("status") == "verified" and x.get("site")})
+    return {"site_now": now, "reminders": _read(state_dir(slug) / "reminders.json", {}),
+            "social": social_hygiene(profile, lost_categories, now, sites), "pdf_keys": list(PDF_PIECES)}
 
 
 def results(slug: str) -> dict | None:
@@ -694,7 +885,7 @@ def results(slug: str) -> dict | None:
         for name, data in reviews["restaurants"].items():
             menu = profile.get("menu", {}) if name == target else comp_menus.get(name, {})
             a = analyse_restaurant(name, data, menu, bench, cheap_rate if name == target else 0.0, area_pl,
-                                   profile.get("anchor_item") or "everyday item")
+                                   profile.get("anchor_item") or "everyday item", food_words(profile))
             a["source"] = data.get("source", "SAMPLE" if is_example else "")
             analyses.append(a)
             if name == target:
@@ -739,6 +930,7 @@ def results(slug: str) -> dict | None:
                           ("Verified creators from data/live/creators_live.json." if pool else
                            "No verified creators added yet (Phase 5).")),
         "pack": content_pack_view(slug, profile, t_site, (reviews or {}).get("restaurants", {}).get(target), faq_text),
+        "housekeeping": _housekeeping(slug, profile, lost_categories),
     }
 
     # ---- 5. Did my visibility improve?

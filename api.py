@@ -356,6 +356,31 @@ def people_say_search(slug: str):
     return pipeline.people_say(slug)
 
 
+@app.post("/api/restaurants/{slug}/site-now")
+def site_now(slug: str):
+    """One free fetch of the restaurant's own homepage, to show 'Now' next to each proposed piece."""
+    _profile_or_404(slug)
+    return pipeline.read_site_now(slug)
+
+
+class RemindIn(BaseModel):
+    key: str
+    undo: bool = False
+
+
+@app.post("/api/restaurants/{slug}/remind")
+def remind(slug: str, body: RemindIn):
+    _profile_or_404(slug)
+    return pipeline.remind_later(slug, body.key, undo=body.undo)
+
+
+@app.get("/api/restaurants/{slug}/pdf/{key}")
+def piece_pdf(slug: str, key: str):
+    _profile_or_404(slug)
+    return Response(pipeline.piece_pdf(slug, key), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{slug}-{key}.pdf"'})
+
+
 # ------------------------------------------------------------------ frontend
 if (WEB / "assets").exists():
     app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")

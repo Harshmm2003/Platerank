@@ -33,6 +33,28 @@ ASPECT_KEYWORDS = {
     "service": ["staff", "service", "rude", "friendly", "waiter", "server", "attentive", "slow service"],
     "portion_wait": ["portion", "small portion", "generous", "wait", "line", "queue", "slow", "quick", "fast"],
 }
+# common dish words across cuisines - reviews name dishes far more often than they say "food"
+COMMON_DISH_WORDS = ["gyro", "souvlaki", "falafel", "hummus", "pita", "kebab", "shawarma", "moussaka", "spanakopita", "baklava",
+                     "taco", "burrito", "quesadilla", "enchilada", "sushi", "ramen", "udon", "pho", "dumpling", "bao", "pizza",
+                     "pasta", "lasagna", "risotto", "burger", "fries", "sandwich", "steak", "curry", "biryani", "naan", "tikka",
+                     "pad thai", "noodles", "bbq", "wings", "brunch", "breakfast", "lunch", "dinner", "appetizer", "entree", "soup"]
+ASPECT_KEYWORDS["food"] = ASPECT_KEYWORDS["food"] + [w for w in COMMON_DISH_WORDS if w not in ASPECT_KEYWORDS["food"]]
+
+
+def food_words(profile: dict | None) -> list[str]:
+    """The restaurant's own words for its food: signature dishes, cuisine, cuisine alternates (lowercase)."""
+    if not profile:
+        return []
+    terms = [profile.get("cuisine") or ""] + list(profile.get("cuisine_alternates") or []) + list(profile.get("signature_terms") or [])
+    out = []
+    for t in terms:
+        t = t.strip().lower()
+        if t:
+            out.append(t)
+            out += [w for w in re.findall(r"[a-z\u00e0-\u00ff]{4,}", t) if w not in ("with", "from", "house", "special", "style")]
+    return sorted(set(out))
+
+
 POS = ["good", "great", "amazing", "delicious", "fresh", "tasty", "love", "best", "worth", "affordable", "cozy", "friendly", "perfect", "generous", "excellent"]
 NEG = ["bad", "bland", "expensive", "overpriced", "pricey", "loud", "cramped", "rude", "slow", "dirty", "disappointing", "not worth", "too much", "small"]
 
@@ -47,8 +69,10 @@ def _sentiment(sentence: str, rating: int) -> int:
         score = 1 if rating >= 4 else (-1 if rating <= 2 else 0)
     return score
 
-def aspect_analysis(reviews: list[dict]) -> dict:
-    """reviews: [{rating:int, text:str}] -> per-aspect mentions, pos/neg, example quotes."""
+def aspect_analysis(reviews: list[dict], extra_food_words: list[str] | None = None) -> dict:
+    """reviews: [{rating:int, text:str}] -> per-aspect mentions, pos/neg, example quotes.
+    extra_food_words: the restaurant's own dish / cuisine words (food_words(profile))."""
+    keywords = {**ASPECT_KEYWORDS, "food": ASPECT_KEYWORDS["food"] + [w for w in extra_food_words or [] if w not in ASPECT_KEYWORDS["food"]]}
     out = {a: {"mentions": 0, "positive": 0, "negative": 0, "pos_quotes": [], "neg_quotes": []}
            for a in ASPECT_KEYWORDS}
     for r in reviews:
@@ -57,7 +81,7 @@ def aspect_analysis(reviews: list[dict]) -> dict:
             if not sent:
                 continue
             low = sent.lower()
-            for aspect, kws in ASPECT_KEYWORDS.items():
+            for aspect, kws in keywords.items():
                 if any(_has_kw(low, k) for k in kws):
                     o = out[aspect]
                     o["mentions"] += 1
@@ -194,8 +218,9 @@ def load_reviews(path: Path) -> dict | None:
     return json.loads(Path(path).read_text(encoding="utf-8")) if Path(path).exists() else None
 
 def analyse_restaurant(name: str, data: dict, menu: dict, benchmark: dict, cheap_mention_rate: float = 0.0,
-                       area_price_level: float | None = None, anchor_item: str = "everyday item") -> dict:
-    aspects = aspect_analysis(data["reviews"])
+                       area_price_level: float | None = None, anchor_item: str = "everyday item",
+                       food_words: list[str] | None = None) -> dict:
+    aspects = aspect_analysis(data["reviews"], food_words)
     vfm = value_for_money_index(aspects, data["avg_rating"], data.get("price_level"), area_price_level)
     return {"restaurant": name, "avg_rating": data["avg_rating"], "review_count": data["review_count"],
             "reviews_analysed": len(data["reviews"]), "price_level": data.get("price_level"),

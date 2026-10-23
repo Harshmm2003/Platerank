@@ -113,6 +113,34 @@ def matches(kind: str, text: str, page: str) -> bool:
 
 
 # ---------------------------------------------------------------- recording + verifying
+def fetch_page(url: str, get=None) -> tuple[dict | None, str]:
+    """One polite fetch. ({"title", "html", "text"}, "") or (None, plain reason)."""
+    get = get or FETCH or requests.get
+    try:
+        r = get(url, timeout=TIMEOUT, headers=UA)
+        if r.status_code >= 400:
+            return None, f"the page answered {r.status_code} (blocked or gone)"
+        if "html" not in (r.headers.get("content-type") or "text/html").lower():
+            return None, "the link isn't a web page we can read"
+        title, text = page_text(r.text)
+        return {"title": title, "html": r.text, "text": re.sub(r"\s+", " ", text).strip()}, ""
+    except Exception as e:
+        return None, f"the page didn't load ({type(e).__name__})"
+
+
+def record_direct(slug: str, items: list[dict]) -> list[dict]:
+    """Text we just read on a page ourselves (e.g. the owner's site) - verified by that fetch, no second request."""
+    now = time.strftime("%Y-%m-%d %H:%M")
+    out = [{"id": _id(it["kind"], it["text"], it["source_url"]), "kind": it["kind"], "subject": it.get("subject", ""),
+            "text": it["text"], "source_url": it["source_url"], "page_title": it.get("page_title", ""), "found_by": "PlateRank page read",
+            "status": VERIFIED, "tier": "page fetch", "check_note": "read directly from the page", "retrieved_at": now} for it in items]
+    if slug and out:
+        keep = {r["id"]: r for r in load(slug)}
+        keep.update({r["id"]: r for r in out})
+        _save(slug, sorted(keep.values(), key=lambda r: r.get("retrieved_at", ""), reverse=True))
+    return out
+
+
 def _id(kind: str, text: str, url: str) -> str:
     return hashlib.sha256(f"{kind}|{normalise(str(text))}|{url}".encode()).hexdigest()[:12]
 

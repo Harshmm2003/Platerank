@@ -122,6 +122,7 @@ export type Results = {
       brief: { concept_title: string; hook: string; format: string; target_category: string; must_include_for_ai_citation: string[] }; outreach: string }[];
     creators_note: string;
     pack: ContentPack;
+    housekeeping: Housekeeping;
   };
   improve: { history: { ts: number; platform: string; mention_rate: number; avg_rank: number | null; share_of_voice: number; answers: number }[]; note: string;
     compare: Compare };
@@ -151,3 +152,8 @@ export type PeopleSay = { can_search: boolean;
   business_value: { ready: boolean; reason?: string; sentiment?: string; counts?: Record<string, number>;
     actions?: { category: string; action: string; evidence: string; quote?: string; source_url?: string | null }[];
     aspects?: Record<string, { positive: number; negative: number; mentions: number; status: string }> } };
+
+export type SiteNow = { at: string; url: string; ok: boolean; note?: string; title?: string;
+  pieces: Record<string, { text: string; found: boolean; evidence: Evidence | null }> };
+export type Housekeeping = { site_now: SiteNow | null; reminders: Record<string, number>; pdf_keys: string[];
+  social: { hashtags: string[]; keywords: string[]; checklist: string[]; note: string } };
