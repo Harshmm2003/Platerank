@@ -507,7 +507,10 @@ def overview(slug: str, out: dict) -> dict:
     # 4 business value
     tabs["business"] = bv.get("sentiment") if bv.get("ready") else bv.get("reason", "")
     # 5 data farming
-    if fv.get("at"):
+    if fv.get("at") and not fv.get("threads") and not fv.get("subreddits"):
+        tabs["farm"] = ("No Reddit conversations could be checked yet - Reddit keeps its pages from automated checks, "
+                        "so nothing unverified is used. Try again later.")
+    elif fv.get("at"):
         tabs["farm"] = (f"{len(fv.get('threads', []))} live Reddit conversations and {len(fv.get('subreddits', []))} subreddits verified; "
                         f"{len(fv.get('drafts', []))} replies ready for you to post.")
     else:

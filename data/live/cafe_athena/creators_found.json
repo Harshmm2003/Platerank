@@ -1,26 +1,26 @@
 {
- "at": "2026-10-23 13:36",
+ "at": "2026-10-23 13:55",
  "creators": [
   {
    "handle": "@savagefoodiee",
-   "name": "Sav (Savagefoodiee)",
+   "name": "savagefoodiee",
    "platform": "TikTok",
    "url": "https://www.tiktok.com/@savagefoodiee",
    "followers": null,
    "engagement_rate": null,
-   "local_to": "Pacific Beach, San Diego, CA",
+   "local_to": "Pacific Beach, San Diego",
    "niches": [
     "happy-hour"
    ],
-   "best_performing_format": "invited restaurant tasting videos",
+   "best_performing_format": "invited restaurant tasting short videos",
    "photo_url": null,
    "verified": false,
    "source_url": "https://www.tiktok.com/@savagefoodiee",
    "evidence": {
-    "id": "9ab7a9dbff23",
+    "id": "384019c39611",
     "status": "unverified",
     "tier": null,
-    "retrieved_at": "2026-10-23 13:36",
+    "retrieved_at": "2026-10-23 13:54",
     "source_url": "https://www.tiktok.com/@savagefoodiee",
     "page_title": "TikTok - Make Your Day",
     "check_note": "the page needs a browser to read - open the link to check",
@@ -29,28 +29,226 @@
    "followers_evidence": null
   },
   {
-   "handle": "@joeythefoodiesd",
-   "name": "Joey | San Diego Foodie",
-   "platform": "TikTok",
-   "url": "https://www.tiktok.com/@joeythefoodiesd",
+   "handle": "@GarethEats",
+   "name": "Gareth Eats (Gareth Leonard)",
+   "platform": "YouTube",
+   "url": "https://www.youtube.com/@GarethEats",
    "followers": null,
    "engagement_rate": null,
-   "local_to": "San Diego County, CA (incl. Vista)",
+   "local_to": "San Diego",
    "niches": [
-    "lunch"
+    "generic"
    ],
-   "best_performing_format": "dish-by-dish restaurant showcase videos",
+   "best_performing_format": "'I tried the BEST X in San Diego' videos",
+   "photo_url": null,
+   "verified": true,
+   "source_url": "https://www.youtube.com/@GarethEats",
+   "evidence": {
+    "id": "f043a5c03985",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://www.youtube.com/@GarethEats",
+    "page_title": "Gareth Eats - YouTube",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": null
+  },
+  {
+   "handle": "@garetheats",
+   "name": "Gareth Leonard",
+   "platform": "Instagram",
+   "url": "https://www.instagram.com/garetheats/",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego",
+   "niches": [
+    "generic"
+   ],
+   "best_performing_format": "short food review reels",
+   "photo_url": null,
+   "verified": true,
+   "source_url": "https://www.instagram.com/garetheats/",
+   "evidence": {
+    "id": "7e5e205f3064",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://www.instagram.com/garetheats/",
+    "page_title": "Gareth Leonard (@garetheats) • Instagram photos and videos",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": {
+    "id": "b85e9b5fda36",
+    "status": "rejected",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://www.instagram.com/garetheats/",
+    "page_title": "Gareth Leonard (@garetheats) • Instagram photos and videos",
+    "check_note": "not found on the cited page",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "handle": "@peterelenes",
+   "name": "Peter Elenes",
+   "platform": "TikTok",
+   "url": "https://www.tiktok.com/@peterelenes",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego",
+   "niches": [
+    "generic"
+   ],
+   "best_performing_format": "short restaurant review videos",
    "photo_url": null,
    "verified": false,
-   "source_url": "https://www.tiktok.com/@joeythefoodiesd",
+   "source_url": "https://www.tiktok.com/@peterelenes",
    "evidence": {
-    "id": "5ae9bffe7f30",
+    "id": "e21730758dab",
     "status": "unverified",
     "tier": null,
-    "retrieved_at": "2026-10-23 13:36",
-    "source_url": "https://www.tiktok.com/@joeythefoodiesd",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://www.tiktok.com/@peterelenes",
     "page_title": "TikTok - Make Your Day",
     "check_note": "the page needs a browser to read - open the link to check",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": {
+    "id": "fa5d4a9e4338",
+    "status": "rejected",
+    "tier": null,
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://infludata.com/rankings/top-20-influencer-united-states-of-america-san-diego-food-tiktok",
+    "page_title": "Top 20 San Diego Food & Drink TikTok Influencers (Oct 2026) - influData",
+    "check_note": "not found on the cited page",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "handle": "@sdfoodies",
+   "name": "SDFoodies (Chris & Ashley)",
+   "platform": "Instagram",
+   "url": "https://www.instagram.com/sdfoodies/",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego County (Imperial Beach to Oceanside)",
+   "niches": [
+    "generic"
+   ],
+   "best_performing_format": "couple restaurant discovery reels",
+   "photo_url": null,
+   "verified": true,
+   "source_url": "https://www.instagram.com/sdfoodies/",
+   "evidence": {
+    "id": "c79105a9874c",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://www.instagram.com/sdfoodies/",
+    "page_title": "San Diego Foodies (@sdfoodies) • Instagram photos and videos",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": null
+  },
+  {
+   "handle": "@cinfullyfoodie",
+   "name": "Cindy Wang",
+   "platform": "Instagram",
+   "url": "https://www.instagram.com/cinfullyfoodie/",
+   "followers": 31000,
+   "engagement_rate": null,
+   "local_to": "San Diego",
+   "niches": [
+    "generic"
+   ],
+   "best_performing_format": "dish showcase photos and reels",
+   "photo_url": null,
+   "verified": true,
+   "source_url": "https://www.instagram.com/cinfullyfoodie/",
+   "evidence": {
+    "id": "68f910404a92",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://www.instagram.com/cinfullyfoodie/",
+    "page_title": "Cindy Wang (@cinfullyfoodie) • Instagram photos and videos",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": {
+    "id": "8b87474fa690",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://sandiegomagazine.com/food-drink/san-diego-food-influencers-to-follow-right-now/",
+    "page_title": "San Diego Food Influencers to Follow Right Now - San Diego Magazine",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "handle": "@jas_thefoodie",
+   "name": "Jas Grover | San Diego Food & Travel",
+   "platform": "Instagram",
+   "url": "https://www.instagram.com/jas_thefoodie/",
+   "followers": 28400,
+   "engagement_rate": null,
+   "local_to": "San Diego",
+   "niches": [
+    "tourist"
+   ],
+   "best_performing_format": "food and travel reels",
+   "photo_url": null,
+   "verified": true,
+   "source_url": "https://www.instagram.com/jas_thefoodie/",
+   "evidence": {
+    "id": "710113765796",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://www.instagram.com/jas_thefoodie/",
+    "page_title": "Jas Grover | San Diego Food & Travel (@jas_thefoodie) • Instagram photos and videos",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   },
+   "followers_evidence": {
+    "id": "6098b4248c9f",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:54",
+    "source_url": "https://brandsforcreators.com/influencers/san-diego",
+    "page_title": "Top San Diego Influencers 2026: Hire Local Creators",
+    "check_note": "found on the cited page",
+    "found_by": "Claude web search"
+   }
+  },
+  {
+   "handle": "@sandiegofoodgram",
+   "name": "Stephanie Dupuis",
+   "platform": "Instagram",
+   "url": "https://www.instagram.com/sandiegofoodgram/",
+   "followers": null,
+   "engagement_rate": null,
+   "local_to": "San Diego",
+   "niches": [
+    "drinks"
+   ],
+   "best_performing_format": "best-spots roundup reels",
+   "photo_url": null,
+   "verified": true,
+   "source_url": "https://www.instagram.com/sandiegofoodgram/",
+   "evidence": {
+    "id": "1a9de1b813c8",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 13:55",
+    "source_url": "https://www.instagram.com/sandiegofoodgram/",
+    "page_title": "Stephanie Dupuis (@sandiegofoodgram) • Instagram photos and videos",
+    "check_note": "found on the cited page",
     "found_by": "Claude web search"
    },
    "followers_evidence": null
@@ -62,74 +260,20 @@
    "url": "https://www.tiktok.com/@saritathestylist",
    "followers": null,
    "engagement_rate": null,
-   "local_to": "San Diego, CA",
+   "local_to": "San Diego",
    "niches": [
     "generic"
    ],
-   "best_performing_format": "restaurant review videos",
+   "best_performing_format": "hidden-gem restaurant review clips",
    "photo_url": null,
    "verified": false,
    "source_url": "https://www.tiktok.com/@saritathestylist",
    "evidence": {
-    "id": "17769c3871c1",
+    "id": "6234f0fbac59",
     "status": "unverified",
     "tier": null,
-    "retrieved_at": "2026-10-23 13:36",
+    "retrieved_at": "2026-10-23 13:55",
     "source_url": "https://www.tiktok.com/@saritathestylist",
-    "page_title": "TikTok - Make Your Day",
-    "check_note": "the page needs a browser to read - open the link to check",
-    "found_by": "Claude web search"
-   },
-   "followers_evidence": null
-  },
-  {
-   "handle": "@savanasmith",
-   "name": "Savana Smith",
-   "platform": "TikTok",
-   "url": "https://www.tiktok.com/@savanasmith",
-   "followers": null,
-   "engagement_rate": null,
-   "local_to": "San Diego, CA",
-   "niches": [
-    "generic"
-   ],
-   "best_performing_format": "short restaurant feature videos",
-   "photo_url": null,
-   "verified": false,
-   "source_url": "https://www.tiktok.com/@savanasmith",
-   "evidence": {
-    "id": "41e15b1e427f",
-    "status": "unverified",
-    "tier": null,
-    "retrieved_at": "2026-10-23 13:36",
-    "source_url": "https://www.tiktok.com/@savanasmith",
-    "page_title": "TikTok - Make Your Day",
-    "check_note": "the page needs a browser to read - open the link to check",
-    "found_by": "Claude web search"
-   },
-   "followers_evidence": null
-  },
-  {
-   "handle": "@le_vjollca",
-   "name": "Vjollca Hennie",
-   "platform": "TikTok",
-   "url": "https://www.tiktok.com/@le_vjollca",
-   "followers": null,
-   "engagement_rate": null,
-   "local_to": "San Diego, CA (Linda Vista)",
-   "niches": [
-    "generic"
-   ],
-   "best_performing_format": "short restaurant feature videos",
-   "photo_url": null,
-   "verified": false,
-   "source_url": "https://www.tiktok.com/@le_vjollca",
-   "evidence": {
-    "id": "17f9ffb1ef73",
-    "status": "unverified",
-    "tier": null,
-    "retrieved_at": "2026-10-23 13:36",
-    "source_url": "https://www.tiktok.com/@le_vjollca",
     "page_title": "TikTok - Make Your Day",
     "check_note": "the page needs a browser to read - open the link to check",
     "found_by": "Claude web search"
@@ -137,8 +281,8 @@
    "followers_evidence": null
   }
  ],
- "found": 6,
+ "found": 10,
  "dropped_no_url": 0,
  "rejected": 1,
- "cost_usd": 0.4692
+ "cost_usd": 0.3429
 }

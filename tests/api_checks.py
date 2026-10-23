@@ -771,6 +771,11 @@ from platerank import reddit as _rd
 check("live fix: thread search suggests site:reddit.com searches; creators search YouTube first",
       "site:reddit.com" in _rd.THREADS_PROMPT and "'youtube {cuisine} food {city}'" in creators_mod.FIND_PROMPT)
 
+from platerank import reddit as _rd2
+_rd2._save("check_diner", {"at": "2026-10-23 14:00", "subreddits": [], "threads": [], "drafts": [], "posted": {}})
+check("live fix: Data farming with nothing verified says so plainly (no '0 ... 0 ... 0')",
+      c.get("/api/restaurants/check_diner/results").json()["headlines"]["farm"].startswith("No Reddit conversations could be checked yet"))
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")

@@ -1,56 +1,52 @@
 {
  "facts_hash": "491a05b9baa55743",
- "at": "2026-10-23 13:37",
+ "at": "2026-10-23 13:55",
  "model": "claude-opus-5-5",
- "cost_usd": 0.041,
- "about": "Café Athena (also written Cafe Athena) has been serving Greek food at 1846 Garnet Ave in Pacific Beach, San Diego, since 1990. Locals in PB and visitors to the neighbourhood come to us for lunch, dinner and an easygoing happy hour. Our cooking is Greek, and some guests also describe it as Mediterranean. The menu includes gluten-free and vegan options, so mixed tables can eat together. [OWNER TO CONFIRM: a sentence on the restaurant's story or signature dishes, if you'd like one included]\n\nWe have a full bar with cocktails, and happy hour runs daily from 3 to 6pm. We welcome groups, host private events and offer catering, whether you're planning a birthday dinner on Garnet Ave or feeding a crowd elsewhere in San Diego. We're open Sunday to Thursday 11am–9pm and Friday to Saturday 11am–9:30pm. If you have a food allergy, please talk with our team before you order.",
+ "cost_usd": 0.0391,
+ "about": "Café Athena has been serving Greek food on Garnet Ave in Pacific Beach since 1990. You'll find us at 1846 Garnet Ave, in the heart of PB, where neighbours and visitors come in for Greek and Mediterranean cooking, a full bar and cocktails. We're open every day from 11am, and our daily happy hour runs 3–6pm.\n\nWe want everyone at the table to have something to enjoy, so our menu includes gluten-free and vegan options. If you have a food allergy, please talk to our team before you order. Café Athena is also set up for groups, whether that's a birthday dinner, a work get-together or a family celebration. We host private events and offer catering, so we can come to you or welcome you to us. [OWNER TO CONFIRM: a sentence about signature dishes or what makes the food special]",
  "menu_descriptions": [],
  "landing": {
-  "intro": "Café Athena is a Greek restaurant at 1846 Garnet Ave in Pacific Beach (PB), San Diego, open since 1990. We serve lunch and dinner with gluten-free and vegan options, a full bar and a daily happy hour. We also host groups and private events and offer catering.",
-  "meta_description": "Café Athena: Greek food on Garnet Ave in Pacific Beach (PB), San Diego since 1990. Gluten-free & vegan options, full bar, happy hour daily 3–6pm.",
+  "intro": "Café Athena (also written Cafe Athena) is a Greek and Mediterranean restaurant at 1846 Garnet Ave in Pacific Beach, San Diego, open since 1990. In the middle of PB, it has a full bar, cocktails, a daily happy hour, and gluten-free and vegan options. It also offers group dining, private events and catering.",
+  "meta_description": "Café Athena: Greek & Mediterranean on Garnet Ave in Pacific Beach (PB), San Diego, since 1990. Daily 3–6pm happy hour, vegan & gluten-free options.",
   "facts": [
-   "Greek cuisine, also described as Mediterranean",
-   "1846 Garnet Ave, San Diego, CA 92109, in Pacific Beach (PB)",
+   "Greek restaurant, also described as Mediterranean",
+   "Address: 1846 Garnet Ave, San Diego, CA 92109 (Pacific Beach / PB)",
    "Open since 1990",
    "Hours: Sun–Thu 11am–9pm, Fri–Sat 11am–9:30pm",
    "Happy hour daily, 3–6pm",
+   "Full bar and cocktails",
    "Gluten-free and vegan options",
-   "Full bar with cocktails",
    "Group dining, private events and catering"
   ],
   "qa": [
    {
     "q": "Where is Café Athena in Pacific Beach?",
-    "a": "Café Athena is at 1846 Garnet Ave, San Diego, CA 92109, in Pacific Beach (PB)."
+    "a": "Café Athena is at 1846 Garnet Ave, San Diego, CA 92109, on Garnet Avenue in Pacific Beach (PB)."
    },
    {
     "q": "What are Café Athena's hours?",
-    "a": "We're open Sunday to Thursday 11am–9pm and Friday to Saturday 11am–9:30pm."
+    "a": "Sunday to Thursday 11am–9pm, and Friday and Saturday 11am–9:30pm."
    },
    {
-    "q": "[OWNER TO CONFIRM: Does Café] Athena have a happy hour?",
-    "a": "Yes. Happy hour runs daily from 3 to 6pm, and we have a full bar with cocktails."
+    "q": "Does Café Athena have a happy hour?",
+    "a": "Yes. Happy hour runs daily from 3pm to 6pm, and there is a full bar with cocktails. [OWNER TO CONFIRM: happy hour specials, if you want them listed]"
    },
    {
-    "q": "[OWNER TO CONFIRM: Does Café] Athena have gluten-free or vegan options?",
-    "a": "Yes, the menu includes gluten-free and vegan options. If you have a food allergy, please speak with our team before ordering. [OWNER TO CONFIRM: how gluten-free items are prepared, e.g. shared kitchen or fryer]"
+    "q": "Does Café Athena have gluten-free or vegan options?",
+    "a": "Yes, the menu includes gluten-free and vegan options. If you have a food allergy, please tell the staff before ordering so they can talk you through your choices."
    },
    {
-    "q": "Can I book a private event or group dinner at Café Athena?",
-    "a": "Yes, we welcome group dining and host private events. [OWNER TO CONFIRM: how to book, e.g. phone number, email or form]"
+    "q": "Can Café Athena host a private event or large group?",
+    "a": "Yes. Café Athena offers group dining and private events. [OWNER TO CONFIRM: group size limits and how to book, e.g. phone number or booking link]"
    },
    {
-    "q": "[OWNER TO CONFIRM: Does Café] Athena offer catering in San Diego?",
-    "a": "Yes, Café Athena offers catering. Visit https://cafeathena.com/ for details. [OWNER TO CONFIRM: catering service area and how to order]"
+    "q": "Does Café Athena do catering?",
+    "a": "Yes, Café Athena offers catering. Visit https://cafeathena.com/ for details. [OWNER TO CONFIRM: how to request a catering quote]"
    }
   ]
  },
  "flags": {
   "pack_about": [],
-  "pack_landing": [
-   "Does Café",
-   "Does Café",
-   "Does Café"
-  ]
+  "pack_landing": []
  }
 }
