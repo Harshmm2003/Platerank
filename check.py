@@ -34,6 +34,7 @@ steps = [
     ("Engines (scoring, VfM, creators, drafts)", [PY, "tests/module_checks.py"]),
     ("Discovery (name matching, cache, quota)", [PY, "tests/discovery_checks.py"]),
     ("Web app backend + Claude helper + map search", [PY, "tests/api_checks.py"]),
+    ("AI-readability drafts + no price advice", [PY, "tests/aiso_checks.py"]),
     ("Old Streamlit app still imports", [PY, "-c", "import ast,sys; ast.parse(open('app.py',encoding='utf-8').read()); print('ok')"]),
 ]
 npm = shutil.which("npm")

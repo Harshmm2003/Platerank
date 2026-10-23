@@ -1,25 +1,24 @@
 {
  "meta": {
-  "ts": 1792778678.0556571,
-  "when": "2026-10-23 14:04",
+  "ts": 1792784481.7381666,
+  "when": "2026-10-23 15:41",
   "platforms": [
    "claude"
   ],
   "runs": 1,
   "web_search": true,
   "counts": {
-   "LIVE": 2,
+   "LIVE": 1,
    "CACHED": 0,
    "DEMO": 0,
    "FAILED": 0
   },
-  "cost_usd": 0.098,
-  "questions": 2,
+  "cost_usd": 0.05,
+  "questions": 1,
   "categories": [
-   "happy-hour",
-   "drinks"
+   "happy-hour"
   ],
-  "note": "No website changes are live yet - this shows how re-checks work, not an improvement."
+  "note": "Directional - AI answers vary run to run."
  },
  "rows": [
   {
@@ -71,70 +70,14 @@
      "title": "The Best Happy Hour Spots in Pacific Beach"
     }
    ],
-   "cost_usd": 0.0505,
+   "cost_usd": 0.0498,
    "status": "LIVE",
    "model": "claude-sonnet-5-5",
-   "answer": "I'm assuming you mean Garnet Ave in Pacific Beach, San Diego. Here are my picks, ranked by food quality first and deals second. Happy hour times change often, so call ahead to confirm.\n\n1. **Costa Brava (1653 Garnet Ave)** has the best food of the group. It offers half-price tapas and $2 sangria. One Yelp reviewer says the patatas bravas are a must, and another praises the paella. Its days and hours are inconsistent across sources. One lists 4–6 p.m. Sunday–Thursday, and another lists Wednesdays and Thursdays only. Check before you go.\n\n2. **Hideaway (Pacific Beach)** is the top-rated happy hour on Yelp for the 92109 area. It's ranked #1 for Pacific Beach happy hours. A reviewer mentions truffle fries and lobster rolls and also praised the Wiseguy pizza. It's a bit farther from Garnet, at about 1.3 miles.\n\n3. **Mavericks Beach Club (860 Garnet Ave)** has a rooftop and a long happy hour window. One source lists Monday–Friday, 2–8 PM, with $4 select drafts and wines and $6 margaritas and cocktails. A blogger ordered shrimp ceviche, garlic parmesan wings, California fries, and chips with salsa and guac. Hours vary a bit by source.\n\n4. **Bar Ella (1030 Garnet Ave)** is the pick for cocktails with small bites. Its listed deals are $5 beer and wine, $6 cocktails, and $6 small bites. Happy hour runs Monday–Thursday 4–6 PM, extended to 7 PM on Fridays.\n\n**Honorable mention:** The Tavern at the Beach (1200 Garnet Ave) is better for a casual crowd and beer. It lists half-off drinks Monday–Friday, 3–8pm. Its food is less of a draw than the four above.\n\nIf you tell me your day and time, or the cuisine you want, I can narrow these down.",
+   "answer": "I assumed you mean Garnet Ave in Pacific Beach, San Diego. Here are my picks, ranked by food quality and happy hour value:\n\n1. **Costa Brava (1653 Garnet Ave)** is my top pick for food. It has half-price tapas and $2 sangria. One reviewer says the patatas bravas are a must and the paella is amazing. Its happy hour hours are listed differently by different sources. One says 4–6 p.m. Sunday–Thursday, and another says Wednesdays and Thursdays only, 5–6 PM. Call ahead to confirm.\n\n2. **Bar Ella (1030 Garnet Ave)** is a stylish spot with a good bar-bites deal. The deals are $5 beer and wine, $6 cocktails and $6 small bites. Happy hour runs Monday–Thursday 4–6 PM, and until 7 PM on Fridays.\n\n3. **The Tavern at the Beach (1200 Garnet Ave, at Everts)** is the best choice for a long happy hour and a patio. It runs Monday–Friday, 3–8 PM, with half off all drinks. The street-side patio has garage doors that open to the ocean breeze. The menu is pub-style, and it's known for its beer selection.\n\n4. **Mavericks Beach Club (860 Garnet Ave)** has a rooftop and the longest window. Happy hour is Monday–Friday, with $4 select drafts and wines and $6 margaritas and cocktails. One review praised the shrimp ceviche, garlic parmesan wings and California fries. The hours are listed as 2–8 PM in one source and 3–8 PM in another.\n\nHappy hour times and deals change often, so check each spot's current menu before you go. Tell me your budget or vibe (a date, a group, or somewhere with a view) and I can narrow these down.",
    "note": "",
    "mentioned": false,
    "rank": null,
    "ordered_mentions": []
-  },
-  {
-   "query": "date night spot in PB with good cocktails",
-   "category": "drinks",
-   "price_tier": "mid",
-   "occasion": "date",
-   "platform": "claude",
-   "run_id": 1,
-   "sources": [
-    {
-     "url": "https://www.opentable.com/features/best-date-night-restaurants-pacific-beach-ca",
-     "title": "402 Best Date Night Restaurants in Pacific Beach"
-    },
-    {
-     "url": "https://www.atly.com/united-states/california/san-diego/pacific-beach/best-chill-date-spots",
-     "title": "Pacific Beach's 5 Best Chill Date Spots"
-    },
-    {
-     "url": "https://www.yelp.com/search?find_desc=Romantic+Date+Night&find_loc=Pacific+Beach%2C+San+Diego%2C+CA+92109",
-     "title": "TOP 10 BEST Romantic Date Night near Pacific Beach, San Diego, ..."
-    },
-    {
-     "url": "https://www.yelp.com/search?cflt=cocktailbars&find_loc=Pacific+Beach,+San+Diego,+CA+92109",
-     "title": "THE BEST 10 COCKTAIL BARS near PACIFIC BEACH, SAN DIEGO, CA 92109 ..."
-    },
-    {
-     "url": "https://www.yelp.com/search?cflt=bars&find_loc=Pacific+Beach%2C+San+Diego%2C+CA+92109",
-     "title": "THE BEST 10 BARS NEAR PACIFIC BEACH, SAN DIEGO, CA 92109 - UPDATED ..."
-    },
-    {
-     "url": "https://www.yelp.com/search?find_desc=fun+things+to+do+on+date+night&find_loc=Pacific+Beach%2C+San+Diego%2C+CA+92109",
-     "title": "TOP 10 BEST Fun Things to Do on Date Night near Pacific Beach, ..."
-    },
-    {
-     "url": "https://sandiegoexplorer.com/pacific-beach-bars/",
-     "title": "Top 20 Pacific Beach Bars For A Fun Night Out - San Diego Explorer"
-    },
-    {
-     "url": "https://missionsands.com/best-date-ideas-in-mission-and-pacific-beach/",
-     "title": "Best Date Ideas in Mission and Pacific Beach - Mission Sands"
-    },
-    {
-     "url": "https://www.sodiego.com/blog/pacific-beach-bars-nightlife/",
-     "title": "Pacific Beach Bars & Nightlife"
-    }
-   ],
-   "cost_usd": 0.0477,
-   "status": "LIVE",
-   "model": "claude-sonnet-5-5",
-   "answer": "Here are my picks for a PB date night with good cocktails, ranked:\n\n1. **Captain's Quarters** is my top pick. It's a nautical-themed speakeasy with a hidden entrance and an upscale lounge feel. Its cocktail list centers on gin. There are also drinks made with rum, mezcal, bourbon, tequila and vodka. The dark, cozy atmosphere suits a romantic nightcap. One reviewer's warning: loud music can make conversation hard. Go early if you want to talk.\n\n2. **Slowly Restaurant & Lounge** is the best choice if you want to talk. It's known for a relaxed atmosphere, stylish decor and expertly crafted cocktails. The dim lighting and cozy seating make it intimate. Yelp ranked it the #1 cocktail bar in PB, at 4.6 stars, and a reviewer called out the \"excellent craft cocktails.\"\n\n3. **The Grass Skirt** is a good pick for a more playful date. It's an upscale tiki speakeasy hidden behind Good Time Poke. You enter through the kitchen. The signature drinks are mai tais and mojitos, and there's an Asian-inspired food menu. Cocktails drop to $10 on midweek evenings from 5 to 6 pm. That makes it a good early stop.\n\n4. **JRDN Restaurant** is the choice if you want a sit-down dinner with an ocean view. It offers hand-crafted signature cocktails, one of San Diego's more creative wine lists, and ocean views.\n\n**Suggested evening:** Start with dinner at JRDN. Then have cocktails at Captain's Quarters or The Grass Skirt, which are right next to each other. Hours and reservation policies change, so check before you go. Speakeasies in particular can be busy on weekends.",
-   "note": "",
-   "mentioned": false,
-   "rank": null,
-   "ordered_mentions": [
-    "Slowly Restaurant & Lounge"
-   ]
   }
  ]
 }

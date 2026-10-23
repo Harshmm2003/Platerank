@@ -396,11 +396,22 @@ def reddit_find(slug: str):
     return pipeline.farm_find(slug)
 
 
+@app.post("/api/restaurants/{slug}/aiso/research")
+def aiso_research(slug: str):
+    """Free: reads the real website, robots.txt and llms.txt, then drafts title/meta, FAQ, schema, robots, llms.txt by code."""
+    _profile_or_404(slug)
+    return pipeline.aiso_research(slug)
+
+
+class ReviewIn(BaseModel):
+    text: str | None = None
+
+
 @app.post("/api/restaurants/{slug}/drafts/{key}/agent-review")
-def agent_review(slug: str, key: str, fresh: bool = False):
+def agent_review(slug: str, key: str, fresh: bool = False, body: ReviewIn | None = None):
     """Promoter vs Skeptic (2-4 Claude calls, or 0 when cached / stopped by the fact check). Verdict + summary by code."""
     _profile_or_404(slug)
-    return pipeline.agent_review(slug, key, fresh)
+    return pipeline.agent_review(slug, key, fresh, body.text if body else None)
 
 
 class OwnerSubIn(BaseModel):

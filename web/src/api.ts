@@ -113,7 +113,6 @@ export type Results = {
   };
   change: {
     moves: Move[]; lost_categories: string[]; vfm_needs_reviews: boolean;
-    price_scenario: { item: string; current: number; area_average: number; current_premium_pct: number; note: string } | null;
     vfm: null | {
       benchmark_label: string; area_price_level: number | null; area_price_level_n: number;
       analyses: {
@@ -165,7 +164,11 @@ export type PeopleSay = { can_search: boolean;
 
 export type SiteNow = { at: string; url: string; ok: boolean; note?: string; title?: string;
   pieces: Record<string, { text: string; found: boolean; evidence: Evidence | null }> };
-export type Housekeeping = { site_now: SiteNow | null; reminders: Record<string, number>; pdf_keys: string[];
+export type AisoItem = { key: string; title: string; strength: "Strong" | "Mixed" | "Weak"; file: string; kind: "text" | "code" | "json";
+  before: string; before_url?: string | null; why: string; research: { text: string; url: string }[]; text: string; problems?: string[] };
+export type Aiso = { researched: boolean; header: string; items: AisoItem[]; at?: string; url?: string; ok?: boolean; error?: string | null; lost?: string[];
+  competitors?: { name: string; ok: boolean; url: string | null; error: string | null; title: string | null; schema: string[]; llms_txt?: boolean }[] };
+export type Housekeeping = { site_now: SiteNow | null; aiso?: Aiso; reminders: Record<string, number>; pdf_keys: string[];
   social: { hashtags: string[]; keywords: string[]; checklist: string[]; note: string } };
 
 export type RedditDraft = { key: string; type: "reply" | "post"; subreddit: string; title: string; text: string; flags: string[]; owner_note?: string;
@@ -185,7 +188,7 @@ export type RealCreator = { handle: string; name: string; platform: string; url:
 export type CreatorsView = { at: string | null; creators: RealCreator[]; found: number; dropped_no_url: number; rejected: number;
   lost_categories: string[]; can_search: boolean };
 
-export type AgentReview = { status: "ok" | "failed"; label: string; verdict: string; summary: string; cached: boolean; suggested_edit: string | null;
+export type AgentReview = { status: "ok" | "failed"; label: string; verdict: string; summary: string; cached: boolean; suggested_edit: string | null; reviewed_text: string; input_text: string;
   transcript: { agent: string; round: number; text: string; citations: string[]; note?: string }[];
   checklist: { rule: string; level: "hard" | "soft"; result: string; reason: string; cite: string; by: string }[];
   rejected_citations: { agent: string; round: number; id: string }[] };

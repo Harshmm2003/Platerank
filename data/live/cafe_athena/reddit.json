@@ -1,5 +1,5 @@
 {
- "at": "2026-10-23 14:29",
+ "at": "2026-10-23 15:02",
  "subreddits": [
   {
    "name": "greekfood",
@@ -34,7 +34,7 @@
  ],
  "threads": [],
  "counts": {
-  "subreddits_found": 1,
+  "subreddits_found": 2,
   "subreddits_verified": 0,
   "threads_found": 0,
   "threads_verified": 0
@@ -90,5 +90,5 @@
   }
  ],
  "posted": {},
- "cost_usd": 0.6997
+ "cost_usd": 0.6649
 }

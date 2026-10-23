@@ -20,7 +20,7 @@ from .analysis import scorecard, by_category, by_dimension, competitor_frequency
 from .scrape import audit_website, diagnose
 from .sources_audit import audit_sources, prioritized_gaps, load_demo_sources, load_sources, save_sources
 from .reviews_vfm import (load_demo as load_reviews_demo, load_reviews, analyse_restaurant, area_benchmark,
-                          benchmark_label, price_scenario, food_words)
+                          benchmark_label, food_words)
 from .creators import (load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places,
                        score_with_unknowns)
 from .content_gen import faq_page, outreach_email
@@ -876,6 +876,17 @@ def read_site_now(slug: str) -> dict:
     return now
 
 
+def aiso_research(slug: str) -> dict:
+    """Read the restaurant's real site (+ robots.txt, llms.txt, competitor sites with a website saved) - free page
+    fetches, no AI - and return the AI-readability drafts built from it."""
+    from . import aiso
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("The sample restaurant is fictional - it has no website to read.")
+    profile = get_profile(slug)
+    aiso.research(slug, profile)
+    return aiso.view(slug, profile, _lost_from_last_run(slug))
+
+
 def remind_later(slug: str, key: str, hours: float = 24, undo: bool = False) -> dict:
     path = state_dir(slug) / "reminders.json"
     data = _read(path, {})
@@ -994,7 +1005,8 @@ def _housekeeping(slug: str, profile: dict, lost_categories: list[str]) -> dict:
     now = _read(state_dir(slug) / "site_now.json", None)
     pub = public_reviews(slug) or {}
     sites = sorted({x.get("site") for x in pub.get("items", []) if (x.get("evidence") or {}).get("status") == "verified" and x.get("site")})
-    return {"site_now": now, "reminders": _read(state_dir(slug) / "reminders.json", {}),
+    from . import aiso
+    return {"site_now": now, "aiso": aiso.view(slug, profile, lost_categories), "reminders": _read(state_dir(slug) / "reminders.json", {}),
             "social": social_hygiene(profile, lost_categories, now, sites), "pdf_keys": list(PDF_PIECES)}
 
 
@@ -1045,9 +1057,15 @@ def _draft_for_review(slug: str, key: str) -> dict:
     raise ValueError("That draft isn't there any more - search again.")
 
 
-def agent_review(slug: str, key: str, fresh: bool = False) -> dict:
+def agent_review(slug: str, key: str, fresh: bool = False, text: str | None = None) -> dict:
+    """text = the wording the owner has on screen now (after edits); reviews that exact text.
+    reviewed_text = what the Skeptic finally checked, so the UI can mark a review out of date."""
     from . import review_agents
-    return review_agents.review(slug, get_profile(slug), _draft_for_review(slug, key), fresh=fresh)
+    d = _draft_for_review(slug, key)
+    if text and text.strip():
+        d = {**d, "text": text.strip()}
+    res = review_agents.review(slug, get_profile(slug), d, fresh=fresh)
+    return {**res, "input_text": d["text"], "reviewed_text": res.get("suggested_edit") or d["text"]}
 
 
 def farm_owner_sub(slug: str, subreddit: str) -> dict:
@@ -1217,10 +1235,6 @@ def results(slug: str) -> dict | None:
                 target_analysis = a
         vfm = {"analyses": analyses, "benchmark": bench, "benchmark_label": benchmark_label(bench),
                "area_price_level": area_pl, "area_price_level_n": len(lv)}
-    menu = profile.get("menu", {})
-    scenario = (price_scenario(menu.get("hero_dish_name") or "Hero dish", menu["hero_dish_price"],
-                               bench["entree_avg"], bench["entree_avg"])
-                if menu.get("hero_dish_price") and bench.get("entree_avg") else None)
 
     # ---- 3. What should I change?  (every gap, routed to the engine that fixes it)
     moves = [{"title": g["gap"], "evidence": g["evidence"], "route": g["action"], "priority": g["priority"],
@@ -1231,7 +1245,7 @@ def results(slug: str) -> dict | None:
         moves += [{"title": f"{r['area']}: {r['recommendation']}", "evidence": r["evidence"], "quote": r["example_quote"],
                    "route": "vfm", "priority": None, "categories": []} for r in target_analysis["recommendations"]]
     out["change"] = {"moves": moves, "lost_categories": lost_categories, "vfm": vfm,
-                     "vfm_needs_reviews": reviews is None, "price_scenario": scenario}
+                     "vfm_needs_reviews": reviews is None}
 
     # ---- 4. Can you make the changes?  (drafts; owner approves each)
     t_site = site.get(target, {}).get("audit") or (src_data.get(target, {}).get("website", {}) if is_example else {})

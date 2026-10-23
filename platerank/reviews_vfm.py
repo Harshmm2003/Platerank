@@ -13,10 +13,9 @@ the SAMPLE file data/reviews_demo.json. Menu prices come from the profile;
 the area benchmark is computed from competitor menus (area_benchmark) and
 always shown with its sample size - never a hardcoded number.
 Honesty rules baked into the code:
-- A price scenario is a POSITION vs the area benchmark, never a sales
-  prediction. Review data has no sales/elasticity signal, so the engine
-  says 'friction' or 'justified premium' - it never says 'cut to $30 and
-  you will sell X more'.
+- No price-change advice: PlateRank never tells the owner to change menu
+  prices. Review data has no sales signal; price shows up only as review
+  sentiment ('friction' or 'justified premium').
 - Every recommendation must carry evidence counts + an example quote.
 """
 import json, re
@@ -159,16 +158,7 @@ def cheap_eats_eligibility(aspects: dict, menu: dict, benchmark: dict,
                     f"Hero dish ${hero:g} vs area average ${bench:g} ({benchmark_label(benchmark)}); review price "
                     f"sentiment {price_sent}; AI mentions it in {round(cheap_mention_rate*100)}% of cheap-eats "
                     "answers. It does not currently belong in cheap-eats answers - and forcing it would fail. "
-                    "Fix the price position on ONE value hero dish first, then earn the mentions.")}
-
-def price_scenario(item: str, current: float, proposed: float, area_avg: float) -> dict:
-    """Position math only - explicitly not a sales forecast."""
-    return {"item": item, "current": current, "proposed": proposed, "area_average": area_avg,
-            "current_premium_pct": round((current / area_avg - 1) * 100),
-            "proposed_premium_pct": round((proposed / area_avg - 1) * 100),
-            "note": ("Scenario, not a prediction: reviews tell us whether price is friction, "
-                     "they cannot tell us unit sales at a new price. Test with a time-boxed "
-                     "special and measure review + mention movement.")}
+                    "Earn value mentions in reviews first.")}
 
 def recommendations(aspects: dict, vfm: dict, menu: dict, benchmark: dict,
                     anchor_item: str = "everyday item") -> list[dict]:
@@ -183,31 +173,12 @@ def recommendations(aspects: dict, vfm: dict, menu: dict, benchmark: dict,
         recs.append({"area": "Ambience", "evidence": f"{amb['negative']} negative vs {amb['positive']} positive ambience mentions",
                      "example_quote": amb["neg_quotes"][0] if amb["neg_quotes"] else "",
                      "recommendation": "; ".join(fixes) or "audit music, lighting and seating against the quoted complaints"})
-    pv = aspects.get("price_value", {})
-    anchor, anchor_avg = menu.get("anchor_price"), benchmark.get("anchor_avg")
-    if anchor and anchor_avg and anchor > anchor_avg * 1.2:
-        recs.append({"area": "Price anchor item",
-                     "evidence": f"{anchor_item.capitalize()} at ${anchor:g} vs area average ${anchor_avg:g} "
-                                 f"({benchmark_label(benchmark, 'anchor')}); price sentiment {pv.get('pos_ratio')}",
-                     "example_quote": pv["neg_quotes"][0] if pv.get("neg_quotes") else "",
-                     "recommendation": f"Baseline the {anchor_item} to ~${anchor_avg:g}. A cheap everyday item is the price "
-                                       "customers remember, and value/'cheap eats' answers lean on it. Keep premium "
-                                       "pricing on signature dishes if food sentiment supports it."})
     svc = aspects.get("service", {})
     if svc.get("pos_ratio") is not None and svc["pos_ratio"] < 0.5 and svc["mentions"] >= 3:
         recs.append({"area": "Service / staff",
                      "evidence": f"{svc['negative']} negative vs {svc['positive']} positive service mentions",
                      "example_quote": svc["neg_quotes"][0] if svc["neg_quotes"] else "",
                      "recommendation": "Staff/service is a named gap: peak-time staffing + a service-recovery script; then a review-generation push once fixed, so new reviews dilute the old signal AI reads."})
-    if vfm["verdict"].startswith("PRICE IS THE FRICTION"):
-        hero, bench = menu.get("hero_dish_price"), benchmark.get("entree_avg")
-        if hero and bench:
-            recs.append({"area": "Hero dish price position",
-                         "evidence": f"Food sentiment {vfm['food_sentiment']} (liked) but price sentiment {vfm['price_sentiment']} "
-                                     f"(not liked); hero dish ${hero:g} vs area ${bench:g} ({benchmark_label(benchmark)})",
-                         "example_quote": pv["neg_quotes"][0] if pv.get("neg_quotes") else "",
-                         "recommendation": f"Don't cut everything. Create ONE value hero dish at ~${bench:g} (e.g. a weekday "
-                                           "lunch set) to earn cheap-eats/value eligibility, and hold price on the dishes reviews praise."})
     return recs
 
 def load_demo() -> dict:

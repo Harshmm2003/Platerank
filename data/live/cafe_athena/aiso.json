@@ -1,0 +1,101 @@
+{
+ "at": "2026-10-23 15:32",
+ "own": {
+  "url": "https://cafeathena.com/",
+  "at": "2026-10-23 15:32",
+  "ok": true,
+  "error": null,
+  "page": {
+   "title": "Authentic Greek and Mediterranean Food - Cafe Athena",
+   "description": "Savor authentic Greek and Mediterranean flavors in Pacific Beach, San Diego! Enjoy our welcoming dining room and bar, or grab easy takeout.",
+   "og_title": "Authentic Greek and Mediterranean Food - Cafe Athena",
+   "og_description": "Savor authentic Greek and Mediterranean flavors in Pacific Beach, San Diego! Enjoy our welcoming dining room and bar, or grab easy takeout.",
+   "jsonld_types": [
+    "WebPage",
+    "BreadcrumbList",
+    "WebSite",
+    "Organization"
+   ],
+   "yoast_graph": true,
+   "phone": "+18582741140",
+   "menu_links": [
+    {
+     "url": "https://cafeathena.com/#FP-menu",
+     "label": "Menus"
+    },
+    {
+     "url": "https://cafeathena.com/lunch-dinner-menu/",
+     "label": "Lunch &#038; Dinner"
+    },
+    {
+     "url": "https://cafeathena.com/bar-happy-hour-menu/",
+     "label": "Bar &#038; Happy Hour"
+    },
+    {
+     "url": "https://cafeathena.com/wp-content/uploads/Catering-Menu-UD-November-2025-1.pdf",
+     "label": "Catering"
+    }
+   ]
+  },
+  "robots_url": "https://cafeathena.com/robots.txt",
+  "robots": {
+   "groups": [
+    {
+     "agents": [
+      "*"
+     ],
+     "disallow": [],
+     "allow": [],
+     "crawl_delay": null
+    }
+   ],
+   "sitemaps": [
+    "https://cafeathena.com/sitemap_index.xml"
+   ],
+   "blocked": {
+    "OAI-SearchBot": false,
+    "ChatGPT-User": false,
+    "Claude-SearchBot": false,
+    "Claude-User": false,
+    "PerplexityBot": false,
+    "Perplexity-User": false,
+    "GPTBot": false,
+    "ClaudeBot": false,
+    "Google-Extended": false
+   },
+   "crawl_delay": null,
+   "names_ai_bots": false
+  },
+  "robots_raw": "Crawl-delay: 10\n# START YOAST BLOCK\n# ---------------------------\nUser-agent: *\nDisallow:\n\nSitemap: https://cafeathena.com/sitemap_index.xml\n# ---------------------------\n# END YOAST BLOCK",
+  "robots_error": null,
+  "llms_url": "https://cafeathena.com/llms.txt",
+  "llms_txt": false,
+  "llms_note": "not found (404)"
+ },
+ "competitors": [
+  {
+   "name": "Spitz - Pacific Beach",
+   "url": null,
+   "ok": false,
+   "error": "no website saved - add it in Setup to compare"
+  },
+  {
+   "name": "Shawarma Shack Mediterranean Grill",
+   "url": null,
+   "ok": false,
+   "error": "no website saved - add it in Setup to compare"
+  },
+  {
+   "name": "Slowly Restaurant & Lounge",
+   "url": null,
+   "ok": false,
+   "error": "no website saved - add it in Setup to compare"
+  },
+  {
+   "name": "Mr Shawarma",
+   "url": null,
+   "ok": false,
+   "error": "no website saved - add it in Setup to compare"
+  }
+ ]
+}

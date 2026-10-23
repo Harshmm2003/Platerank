@@ -33,11 +33,11 @@ def report(cmp: dict) -> str:
     lines = [f"Before/after ({cmp['label']})",
              f"  {'':22}{'first ' + f['when']:>22}{'latest ' + l['when']:>24}   change",
              f"  {'AI names you in':22}{_pct(f['mention_rate']):>22}{_pct(l['mention_rate']):>24}   "
-             f"{'-' if d['mention_rate'] is None else f'{round(d['mention_rate'] * 100):+d} pts'}",
+             f"{'-' if d['mention_rate'] is None else format(round(d['mention_rate'] * 100), '+d') + ' pts'}",
              f"  {'Average position':22}{rank(f['avg_rank']):>22}{rank(l['avg_rank']):>24}   "
-             f"{'-' if d['avg_rank'] is None else f'{d['avg_rank']:+.1f} (lower is better)'}",
+             f"{'-' if d['avg_rank'] is None else format(d['avg_rank'], '+.1f') + ' (lower is better)'}",
              f"  {'Share of voice':22}{_pct(f['share_of_voice']):>22}{_pct(l['share_of_voice']):>24}   "
-             f"{'-' if d['share_of_voice'] is None else f'{round(d['share_of_voice'] * 100):+d} pts'}",
+             f"{'-' if d['share_of_voice'] is None else format(round(d['share_of_voice'] * 100), '+d') + ' pts'}",
              "  Per question type:"]
     lines += [f"    {c['category']:18}{_pct(c['first']):>8} -> {_pct(c['latest']):<6}" for c in cmp["by_category"]]
     if cmp.get("skipped"):

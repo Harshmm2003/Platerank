@@ -20,7 +20,7 @@ from platerank.store import (save_run, save_answers, load_runs, list_profiles, l
                              load_example_profile, restaurant_dir)
 from platerank.sources_audit import audit_sources, prioritized_gaps, load_demo_sources, load_sources, save_sources
 from platerank.reviews_vfm import (load_demo as load_reviews_demo, load_reviews, save_reviews, analyse_restaurant,
-                                   price_scenario, area_benchmark, benchmark_label)
+                                   area_benchmark, benchmark_label)
 from platerank.creators import (load_demo_creators, load_live_creators, match_creators, content_briefs,
                                 outreach_draft, local_places)
 
@@ -561,11 +561,6 @@ with tab_vfm:
                         moves = "\n\n".join(f"{r['area']}: {r['recommendation']}\nEvidence: {r['evidence']}"
                                             for r in a["recommendations"])
                         gate("vfm_moves", "these business moves", moves)
-    menu = profile.get("menu", {})
-    if menu.get("hero_dish_price") and bench["entree_avg"]:
-        st.caption(f"Price position of the hero dish vs the area benchmark ({benchmark_label(bench)}) — a scenario, not a forecast:")
-        st.json(price_scenario(menu.get("hero_dish_name") or "Hero dish", menu["hero_dish_price"],
-                               bench["entree_avg"], bench["entree_avg"]))
 
 with tab_fix:
     st.subheader("What should I change? — fix pack (drafts — the owner approves each one)")

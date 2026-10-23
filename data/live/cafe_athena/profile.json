@@ -36,9 +36,10 @@
  "competitors": [
   {
    "name": "Spitz - Pacific Beach",
-   "website": "",
+   "website": "https://spitz-restaurant.com/",
    "aliases": [],
-   "source": "owner-approved (earlier verified Claude suggestions)"
+   "source": "owner-approved (earlier verified Claude suggestions)",
+   "website_source": "Spitz chain brand site (no separate Pacific Beach page found); PB location 967 Garnet Ave per whatnow.com"
   },
   {
    "name": "Shawarma Shack Mediterranean Grill",
@@ -48,9 +49,10 @@
   },
   {
    "name": "Slowly Restaurant & Lounge",
-   "website": "",
+   "website": "http://www.slowlysd.com/",
    "aliases": [],
-   "source": "owner-approved (earlier verified Claude suggestions)"
+   "source": "owner-approved (earlier verified Claude suggestions)",
+   "website_source": "site lists 1520 Garnet Ave, Pacific Beach; linked in Times of San Diego, Aug 15 2024"
   },
   {
    "name": "Mr Shawarma",

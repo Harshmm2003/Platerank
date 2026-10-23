@@ -1,0 +1,25 @@
+{
+ "note": "Research notes PlateRank's AI-readability drafts cite. Each has its source URL. Collected Oct 23, 2026.",
+ "notes": {
+  "visible_text": {
+   "claim": "AI assistants read the visible text of a page when they fetch it; a separate test found five AI systems used only visible HTML at retrieval.",
+   "source": "https://authoritytech.io/curated/schema-markup-ai-citations-ahrefs-study-2026.md"
+  },
+  "schema_no_lift": {
+   "claim": "Ahrefs (1,885 pages, matched test): adding JSON-LD gave no statistically significant AI-citation lift on Google AI Overviews, AI Mode or ChatGPT.",
+   "source": "https://authoritytech.io/curated/schema-markup-ai-citations-ahrefs-study-2026.md"
+  },
+  "llms_txt_unused": {
+   "claim": "97% of llms.txt files got zero requests in May 2026 (Ahrefs server logs); Google says llms.txt has no ranking effect.",
+   "source": "https://ppc.land/llms-txt-adoption-rises-8-8x-but-97-of-files-get-zero-ai-requests/"
+  },
+  "ai_bots": {
+   "claim": "AI search / user bots (OAI-SearchBot, ChatGPT-User, Claude-SearchBot, Claude-User, PerplexityBot, Perplexity-User) are separate from training bots (GPTBot, ClaudeBot, Google-Extended).",
+   "source": "https://www.anagram.ai/blog/ai-crawler-user-agent-list-2026-14-bots-and-robotstxt-tokens-to-know"
+  },
+  "robots_is_control": {
+   "claim": "OpenAI and Anthropic point site owners to robots.txt to manage their crawlers.",
+   "source": "https://ppc.land/llms-txt-adoption-rises-8-8x-but-97-of-files-get-zero-ai-requests/"
+  }
+ }
+}

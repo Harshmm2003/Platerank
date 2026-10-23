@@ -41,6 +41,7 @@ Setup -> Discovery -> Analysis -> 3 Action tracks (Fix Pack / Creators / Value-f
 | `reddit.py` | Action (Data farming) | Reddit agent: verified subreddits + rules + live threads, owner-voiced reply/post drafts; the owner posts (never PlateRank) |
 | `review_agents.py` | Action (owner approval) | Promoter vs Skeptic review of post drafts on one code-built context packet; step-0 fact check, verdict + summary computed by code, cached by hash |
 | `places.py` | Setup | OpenStreetMap restaurant search (dropdown), place details, radius search for competitors; Claude web facts (price level, rating) with sources |
+| `aiso.py` | Action A | AI-readability: reads the real site + robots.txt + llms.txt (free page fetches), then CODE drafts title/meta, visible FAQ, JSON-LD, robots.txt, llms.txt with evidence strength + research notes (`aiso_research.json`). No AI writes markup |
 | `pipeline.py` | all | The pipeline as functions for the web app: run Discovery, build the results bundle per owner question, approvals, reviews/listings saving |
 | `api.py` | UI backend | FastAPI routes over `pipeline`/`places`; plain-English errors; serves `web/dist` |
 | `web/src/` | UI | React: Home, Setup wizard (find restaurant -> competitors in a radius -> run), Results with 5 owner-question tabs |
@@ -62,7 +63,7 @@ suggest competitors and draft text.
 2. Sample data is labelled SAMPLE on screen. Live vs cached vs demo is always visible.
 3. A failed live call is shown as FAILED, never silently replaced.
 4. The owner approves every draft; nothing is published or sent automatically.
-5. Price outputs are a position + a test plan, never a sales prediction.
+5. No menu price-change advice (removed Oct 23). Price appears only as review sentiment.
 6. Don't claim a same-day ranking improvement — measurement is directional; the claim is the repeated re-test loop.
 7. Instagram is reach, not AI citation; YouTube, listicles, Reddit and reviews are the AI-cited surfaces.
 8. Never certify a dish as safe for an allergy.

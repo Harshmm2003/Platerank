@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AgentReview, AiQuote, api, ApiError, CreatorsView, Evidence, Farm, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
+import { AgentReview, AiQuote, Aiso, api, ApiError, CreatorsView, Evidence, Farm, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
 import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
@@ -351,9 +351,6 @@ function Change({ r, reload }: { r: R; reload: () => void }) {
                 ))}
               </div>
             ))}
-            {ch.price_scenario && (
-              <p className="text-sm text-stone-600">{ch.price_scenario.item}: ${ch.price_scenario.current} vs area ${ch.price_scenario.area_average} ({ch.price_scenario.current_premium_pct > 0 ? "+" : ""}{ch.price_scenario.current_premium_pct}%). {ch.price_scenario.note}</p>
-            )}
           </div>
         ) : r.is_sample ? null : <ReviewsForm r={r} reload={reload} />}
       </Card>
@@ -398,11 +395,12 @@ function ReviewsForm({ r, reload }: { r: R; reload: () => void }) {
 }
 
 // ---------------------------------------------------------------- 4
-function Draft({ r, k, title, kind, text: initial, reload, strict, note, file, open }: { r: R; k: string; title: string; kind: "text" | "code" | "json";
-  text: string; reload: () => void; strict?: boolean; note?: string; file?: string; open?: { href: string; copy: string; kind: string; tip: string } }) {
+function Draft({ r, k, title, kind, text: initial, reload, strict, note, file, open, onText }: { r: R; k: string; title: string; kind: "text" | "code" | "json";
+  text: string; reload: () => void; strict?: boolean; note?: string; file?: string; open?: { href: string; copy: string; kind: string; tip: string }; onText?: (t: string) => void }) {
   const approved = r.approvals[k];
   const hk = useContext(HK);
   const [text, setText] = useState(approved?.text || initial);
+  useEffect(() => { onText?.(text); }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -500,10 +498,61 @@ function Make({ r, reload }: { r: R; reload: () => void }) {
       <div className="grid gap-5 lg:grid-cols-2">
         {m.drafts.map((d) => <Draft key={d.key} r={r} k={d.key} title={d.title} kind={d.kind} text={d.text} reload={reload} />)}
       </div>
+      {!r.is_sample && <AisoSection r={r} a={hk?.aiso} reload={reload} />}
       <ContentPackSection r={r} reload={reload} />
       {hk && <SocialCard s={hk.social} />}
     </div>
     </HK.Provider>
+  );
+}
+
+const STRENGTH_KIND = { Strong: "LIVE", Mixed: "DEMO", Weak: "neutral" } as const;
+
+/** AI-readability: PlateRank reads the real site (free), then code drafts each fix with what it found, why, and how strong the evidence is. */
+function AisoSection({ r, a, reload }: { r: R; a?: Aiso; reload: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function research() {
+    setBusy(true); setError(null);
+    try { await api.post(`/api/restaurants/${r.slug}/aiso/research`); reload(); } catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">AI-readability: what your website tells AI</h3>
+            <p className="text-sm text-stone-500">{a?.researched ? (a.ok ? `Read ${a.url}, its robots.txt and llms.txt at ${a.at}.` : `Couldn't read ${a.url}: ${a.error}`)
+              : "PlateRank reads your real homepage, robots.txt and llms.txt (free, no AI), then drafts each fix from what it finds."}</p>
+          </div>
+          <Button small kind="secondary" busy={busy} onClick={research}>{a?.researched ? "Research again" : "Research my website"}</Button>
+        </div>
+        {busy && <SlowBar label="Reading your homepage, robots.txt and llms.txt… (5–20 seconds)" />}
+        <ErrorNote error={error} />
+        {a?.researched && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{a.header}</p>}
+        {a?.researched && (a.competitors || []).length > 0 && <More label="Competitor websites">
+          <ul className="space-y-1 text-sm">{(a.competitors || []).map((c) => (
+            <li key={c.name}><span className="font-medium">{c.name}</span>: {c.ok ? <>title “{c.title || "none"}” · schema: {c.schema.length ? [...new Set(c.schema)].join(", ") : "none"} · llms.txt: {c.llms_txt ? "yes" : "no"}{c.url && <> · <a className="text-sky-700" href={c.url} target="_blank" rel="noreferrer">site ↗</a></>}</>
+              : <span className="text-stone-500">{c.error}</span>}</li>))}</ul>
+        </More>}
+      </Card>
+      {a?.researched && <div className="grid gap-5 lg:grid-cols-2">{a.items.map((it) => (
+        <div key={it.key} className="space-y-2">
+          <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{it.title}</span>
+              <Badge kind={STRENGTH_KIND[it.strength]}>Evidence: {it.strength}</Badge></div>
+            <div className="mt-2 text-xs font-semibold text-stone-500">Now{it.before_url && <> · <a className="font-normal text-sky-700" href={it.before_url} target="_blank" rel="noreferrer">source ↗</a></>}</div>
+            <div className="whitespace-pre-wrap text-stone-700">{it.before.slice(0, 600)}</div>
+            <div className="mt-2 text-xs font-semibold text-stone-500">Why</div>
+            <div className="text-stone-700">{it.why}</div>
+            {it.research.map((n) => <div key={n.url + n.text} className="mt-1 text-xs text-stone-500">Research: {n.text} <a className="text-sky-700" href={n.url} target="_blank" rel="noreferrer">source ↗</a></div>)}
+            {it.problems && it.problems.length > 0 && <div className="mt-2 text-xs text-red-700">Check failed: {it.problems.join(" ")}</div>}
+          </div>
+          <Draft r={r} k={it.key} title={`Proposed: ${it.file}`} kind={it.kind} text={it.text} reload={reload} file={it.file} />
+        </div>))}
+      </div>}
+    </div>
   );
 }
 
@@ -825,6 +874,7 @@ function FarmTab({ r, reload }: { r: R; reload: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [posted, setPosted] = useState<Record<string, string>>({});
   const [useEdit, setUseEdit] = useState<Record<string, string>>({});
+  const [onScreen, setOnScreen] = useState<Record<string, string>>({});
   const load = useCallback(() => api.get<Farm>(`/api/restaurants/${r.slug}/reddit`).then(setD).catch((e) => setError(e.message)), [r.slug]);
   useEffect(() => { load(); }, [load]);
   const reloadAll = () => { reload(); load(); };
@@ -881,8 +931,10 @@ function FarmTab({ r, reload }: { r: R; reload: () => void }) {
           <div key={x.key} className="space-y-2">
             {x.type === "reply" && x.thread_url && <p className="text-xs text-stone-500">Thread: <a className="text-sky-700" href={x.thread_url} target="_blank" rel="noreferrer">{x.thread_title} ↗</a></p>}
             {x.type === "post" && <p className="text-xs text-stone-500">Title: {x.post_title}{x.flair_required ? " · pick a flair when posting" : ""}</p>}
-            <AgentReviewPanel slug={r.slug} draftKey={x.key} onUseEdit={(t) => setUseEdit({ ...useEdit, [x.key]: t })} />
+            <AgentReviewPanel slug={r.slug} draftKey={x.key} currentText={onScreen[x.key] ?? (useEdit[x.key] || r.approvals[x.key]?.text || x.text)}
+              onUseEdit={(t) => setUseEdit({ ...useEdit, [x.key]: t })} />
             <Draft key={`${x.key}-${useEdit[x.key] ? "edit" : "orig"}`} r={r} k={x.key} title={x.title} kind="text" text={useEdit[x.key] || x.text} reload={reloadAll} strict
+              onText={(t) => setOnScreen((s) => (s[x.key] === t ? s : { ...s, [x.key]: t }))}
               note={[x.owner_note || "", x.rule ? `Follows r/${x.subreddit}'s rule: “${x.rule}”` : "", x.flags.length ? `Marked for you to confirm (not in your facts): ${x.flags.join(", ")}` : ""].filter(Boolean).join(" ")}
               open={d.links[x.key] ? { ...d.links[x.key], tip: d.post_note } : undefined} />
             {r.approvals[x.key] && (d.posted?.[x.key]
@@ -1019,7 +1071,7 @@ function BusinessTab({ r, reload }: { r: R; reload: () => void }) {
   return (
     <div className="space-y-5">
       <PeopleSaySection slug={r.slug} part="value" />
-      {r.change && <More label="Show more: value for money, price position and every change by tool"><Change r={r} reload={reload} /></More>}
+      {r.change && <More label="Show more: value for money and every change by tool"><Change r={r} reload={reload} /></More>}
       {!r.change && !r.is_sample && <More label="Show more: paste reviews you have"><ReviewsForm r={r} reload={reload} /></More>}
     </div>
   );
@@ -1130,30 +1182,32 @@ function PartialCard({ r }: { r: R }) {
 const VERDICT_KIND: Record<string, BadgeKind> = { "Ready for you to post": "LIVE", "Post after edits": "DEMO", "Don't post": "FAILED" };
 
 /** Promoter vs Skeptic on one draft. The verdict and summary are computed by code; the owner decides. */
-function AgentReviewPanel({ slug, draftKey, onUseEdit }: { slug: string; draftKey: string; onUseEdit: (text: string) => void }) {
+function AgentReviewPanel({ slug, draftKey, currentText, onUseEdit }: { slug: string; draftKey: string; currentText: string; onUseEdit: (text: string) => void }) {
   const [rv, setRv] = useState<AgentReview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function run(fresh = false) {
     setBusy(true); setError(null);
-    try { setRv(await api.post<AgentReview>(`/api/restaurants/${slug}/drafts/${encodeURIComponent(draftKey)}/agent-review?fresh=${fresh}`)); }
+    try { setRv(await api.post<AgentReview>(`/api/restaurants/${slug}/drafts/${encodeURIComponent(draftKey)}/agent-review?fresh=${fresh}`, { text: currentText })); }
     catch (e) { setError((e as Error).message); }
     setBusy(false);
   }
+  const stale = !!rv && ![rv.reviewed_text, rv.input_text].some((t) => (t || "").trim() === currentText.trim());
   return (
     <div className="rounded-lg border border-stone-200 bg-white p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold">Two-agent review</span>
         <div className="flex gap-2">
-          <Button small kind="secondary" busy={busy} onClick={() => run(false)}>{rv ? "Show review" : "Review with 2 agents"}</Button>
+          <Button small kind="secondary" busy={busy} onClick={() => run(false)}>{!rv ? "Review with 2 agents" : stale ? "Review this version" : "Show review"}</Button>
           {rv && <Button small kind="ghost" busy={busy} onClick={() => run(true)} title="Ignore the saved review and ask both agents again">Review again</Button>}
         </div>
       </div>
       {busy && <SlowBar label="A Promoter and a Skeptic are debating this draft… (10–40 seconds)" />}
       <ErrorNote error={error} />
-      {rv && <div className="mt-2 space-y-3">
+      {stale && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">Out of date - the draft changed after this review. Click “Review this version” to check the new wording.</p>}
+      {rv && <div className={cx("mt-2 space-y-3", stale && "opacity-50")}>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge kind={VERDICT_KIND[rv.verdict] || "neutral"}>{rv.verdict}</Badge>
+          {stale ? <Badge kind="neutral">out of date</Badge> : <Badge kind={VERDICT_KIND[rv.verdict] || "neutral"}>{rv.verdict}</Badge>}
           <span className="text-xs text-stone-500">{rv.label}</span>
           {rv.cached && <span className="text-xs text-stone-400">Same answer as last time (saved)</span>}
         </div>

@@ -1,0 +1,138 @@
+{
+ "draft_key": "reddit_owner_greekfood_1",
+ "target": "r/greekfood",
+ "status": "ok",
+ "transcript": [
+  {
+   "agent": "Promoter",
+   "round": 1,
+   "text": "The draft discloses ownership up front (R1). Its claims match owner-confirmed facts: address, area, hours, happy hour 3–6pm, full bar, and Greek-mythology cocktails (fact:address, fact:hours, fact:happy_hour, fact:known_for). It has no reviews, incentives or superlatives (R3, R4, R5). Two weaknesses remain. It reads a bit like an ad for r/greekfood (R6), and the subreddit's rules are unverified (R7). I'm proposing a lighter edit that keeps only confirmed facts. The owner must read the r/greekfood rules before posting.",
+   "citations": [
+    "R1",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7",
+    "fact:address",
+    "fact:hours",
+    "fact:happy_hour",
+    "fact:known_for"
+   ],
+   "note": "Proposed an edited version."
+  },
+  {
+   "agent": "Skeptic",
+   "round": 1,
+   "citations": [
+    "R1",
+    "fact:owner_confirmed_note",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+   ],
+   "text": "Fails R6: The post leads with happy hour, hours and address, so it reads as promotion and gives r/greekfood nothing helpful to discuss.; R7: The subreddit's rules are unverified (target_rules_verified is false), so the owner must read them before posting."
+  },
+  {
+   "agent": "Promoter",
+   "round": 2,
+   "text": "The hard rules all pass (R1-R5). The two soft failures can be fixed. I'd make the post a low-key, Greek-food-focused introduction. That means dropping the title's happy-hour pitch and the hours-and-address block, and keeping only facts the owner confirmed. R7 can't be fixed by editing the text, so the owner must read r/greekfood's rules before posting.",
+   "citations": [
+    "R1",
+    "R2",
+    "R6",
+    "R7",
+    "fact:year_opened",
+    "fact:cuisine",
+    "fact:area",
+    "fact:city",
+    "fact:known_for",
+    "fact:owner_confirmed_note",
+    "E2"
+   ],
+   "note": "Proposed an edited version."
+  },
+  {
+   "agent": "Skeptic",
+   "round": 2,
+   "citations": [
+    "R1",
+    "fact:happy_hour",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+   ],
+   "text": "Fails R2: The title still claims happy hour daily 3–6pm on Garnet Ave, but the promoter said the title pitch would be dropped. The body also says 'Pacific Beach' and 'since 1990', which are fine. The mismatch is that the draft's title differs from the suggested edit, and the body's 'Greek and Mediterranean' and 'full bar with Greek-mythology cocktails' are supported.; R6: The draft's title still carries a happy-hour pitch, which reads as an ad and doesn't match the Greek-food discussion tone the body aims for.; R7: The subreddit's rules are unverified, and the owner must read them before posting."
+  }
+ ],
+ "checklist": [
+  {
+   "rule": "R1",
+   "level": "hard",
+   "result": "pass",
+   "reason": "Both the title and body say the poster is the owner of Café Athena.",
+   "cite": "R1",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R2",
+   "level": "hard",
+   "result": "fail",
+   "reason": "The title still claims happy hour daily 3–6pm on Garnet Ave, but the promoter said the title pitch would be dropped. The body also says 'Pacific Beach' and 'since 1990', which are fine. The mismatch is that the draft's title differs from the suggested edit, and the body's 'Greek and Mediterranean' and 'full bar with Greek-mythology cocktails' are supported.",
+   "cite": "fact:happy_hour",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R3",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The draft has no customer quotes or invented reviews.",
+   "cite": "R3",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R4",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The draft offers no incentive and doesn't ask for reviews of any kind.",
+   "cite": "R4",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R5",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The draft makes no superlative or 'best' claims.",
+   "cite": "R5",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R6",
+   "level": "soft",
+   "result": "fail",
+   "reason": "The draft's title still carries a happy-hour pitch, which reads as an ad and doesn't match the Greek-food discussion tone the body aims for.",
+   "cite": "R6",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R7",
+   "level": "soft",
+   "result": "fail",
+   "reason": "We couldn't check this subreddit's rules - read them before posting.",
+   "cite": "R7",
+   "by": "code"
+  }
+ ],
+ "verdict": "Don't post",
+ "summary": "Verdict: Don't post. Passed: R1, R3, R4, R5. Failed: R2 (The title still claims happy hour daily 3–6pm on Garnet Ave, but the promoter said the title pitch would be dropped. The body also says 'Pacific Beach' and 'since 1990', which are fine. The mismatch is that the draft's title differs from the suggested edit, and the body's 'Greek and Mediterranean' and 'full bar with Greek-mythology cocktails' are supported.); R6 (The draft's title still carries a happy-hour pitch, which reads as an ad and doesn't match the Greek-food discussion tone the body aims for.); R7 (We couldn't check this subreddit's rules - read them before posting.). Suggested edit: yes - see below.",
+ "suggested_edit": "Title: Owner of Café Athena here - happy to talk Greek food with r/greekfood\n\nHi all, I'm the owner of Café Athena, a Greek restaurant in Pacific Beach, San Diego. We've been open since 1990. Our food is Greek and Mediterranean, and we also do a full bar with Greek-mythology cocktails. We have gluten-free and vegan options too. I'm happy to answer questions about Greek dishes, ingredients or our menu. Please check the sub's rules first; I'll follow them.",
+ "rejected_citations": [],
+ "calls": 4,
+ "first_cost": 0.0551,
+ "prompt_version": "review-v1",
+ "label": "Two AI agents reviewed this. You decide."
+}
