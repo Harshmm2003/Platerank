@@ -1,0 +1,70 @@
+{
+ "at": "2026-10-23 15:33",
+ "url": "https://cafeathena.com/",
+ "ok": true,
+ "pieces": {
+  "pack_restaurant_schema": {
+   "text": "Your homepage doesn't give AI your business details in its format.",
+   "found": false,
+   "evidence": null
+  },
+  "pack_faq_schema": {
+   "text": "Your homepage has no FAQ in the format AI reads.",
+   "found": false,
+   "evidence": null
+  },
+  "faq_page": {
+   "text": "No FAQ on the homepage.",
+   "found": false,
+   "evidence": null
+  },
+  "pack_menu_schema": {
+   "text": "Your homepage has no menu in the format AI reads.",
+   "found": false,
+   "evidence": null
+  },
+  "pack_menu_copy": {
+   "text": "Menu link on the homepage: “Menus” → /#FP-menu",
+   "found": true,
+   "evidence": {
+    "id": "af1e16c65929",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 15:33",
+    "source_url": "https://cafeathena.com/",
+    "page_title": "Authentic Greek and Mediterranean Food - Cafe Athena",
+    "check_note": "read directly from the page",
+    "found_by": "PlateRank page read"
+   }
+  },
+  "pack_about": {
+   "text": "Read our Story Fresh & Authentic Explore our Menus Indulge in authentic Greek and Mediterranean flavors at Café Athena. Every dish is prepared fresh daily, using traditional recipes and premium ingredients that capture the essence of Greek and Mediterranean cuisine. From savory souvlakis and fresh salads to hearty moussaka and handmade desserts, our menu offers something for everyone. Offering a full menu including vegan, vegetarian, and gluten-free options. Pair your meal with a selection from our f",
+   "found": true,
+   "evidence": {
+    "id": "0dd5527996ee",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 15:33",
+    "source_url": "https://cafeathena.com/",
+    "page_title": "Authentic Greek and Mediterranean Food - Cafe Athena",
+    "check_note": "read directly from the page",
+    "found_by": "PlateRank page read"
+   }
+  },
+  "pack_landing": {
+   "text": "Page title: Authentic Greek and Mediterranean Food - Cafe Athena\nDescription: Savor authentic Greek and Mediterranean flavors in Pacific Beach, San Diego! Enjoy our welcoming dining room and bar, or grab easy takeout.\n889 words of readable text on the homepage.",
+   "found": true,
+   "evidence": {
+    "id": "679e5d01b52b",
+    "status": "verified",
+    "tier": "page fetch",
+    "retrieved_at": "2026-10-23 15:33",
+    "source_url": "https://cafeathena.com/",
+    "page_title": "Authentic Greek and Mediterranean Food - Cafe Athena",
+    "check_note": "read directly from the page",
+    "found_by": "PlateRank page read"
+   }
+  }
+ },
+ "title": "Authentic Greek and Mediterranean Food - Cafe Athena"
+}

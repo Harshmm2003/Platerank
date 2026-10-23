@@ -1,0 +1,135 @@
+{
+ "draft_key": "reddit_owner_greekfood_1",
+ "target": "r/greekfood",
+ "status": "ok",
+ "transcript": [
+  {
+   "agent": "Promoter",
+   "round": 1,
+   "text": "The draft discloses ownership (R1). Every claim matches owner-confirmed facts: the address, daily 3–6pm happy hour, full bar, Greek-mythology cocktails, and hours (fact:address, fact:happy_hour, fact:known_for, fact:hours). It has no reviews, superlatives, or incentives (R3, R4, R5). Two weaknesses remain. The tone is a bit ad-like for r/greekfood (R6). The subreddit's rules are unverified (R7), so the owner must read them before posting. My edit makes the post less promotional and adds that reminder.",
+   "citations": [
+    "R1",
+    "R2",
+    "R5",
+    "R6",
+    "R7",
+    "fact:address",
+    "fact:happy_hour",
+    "fact:hours",
+    "fact:known_for"
+   ],
+   "note": "Proposed an edited version."
+  },
+  {
+   "agent": "Skeptic",
+   "round": 1,
+   "citations": [
+    "R1",
+    "fact:owner_confirmed_note",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+   ],
+   "text": "Fails R6: The post is a list of address, hours and happy hour, which reads like an ad and gives r/greekfood nothing useful beyond promotion.; R7: The subreddit's rules are unverified (target_rules_verified is false), and the draft text does not include a reminder for the owner to read them before posting."
+  },
+  {
+   "agent": "Promoter",
+   "round": 2,
+   "text": "The hard rules all pass: the owner is disclosed, and the facts match the owner-confirmed profile (fact:owner_confirmed_note). The two failures can be fixed. I made the post conversational and useful to a Greek-food community, and I dropped the hours and address dump. R7 is a note to the owner, not post text, so the owner must read r/greekfood's rules before posting because they are unverified.",
+   "citations": [
+    "R1",
+    "R2",
+    "R6",
+    "R7",
+    "fact:owner_confirmed_note",
+    "fact:happy_hour",
+    "fact:year_opened",
+    "fact:known_for",
+    "fact:area"
+   ],
+   "note": "Proposed an edited version."
+  },
+  {
+   "agent": "Skeptic",
+   "round": 2,
+   "citations": [
+    "R1",
+    "fact:owner_confirmed_note",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+   ],
+   "text": "Fails R2: The title says 'on Garnet Ave', which matches fact:address. The body claims match the facts: open since 1990, Greek, Pacific Beach, happy hour daily 3–6pm, full bar, Greek-mythology cocktails, vegan and gluten-free options. The one exception is 'Greek-mythology cocktails' in the body, which is listed under known_for and so is supported. Nothing contradicts the facts, so R2 would pass on content, but 'daily' and the other claims should be confirmed against fact:owner_confirmed_note.; R6: The title and first lines lead with a happy hour promotion, which reads partly like an ad in a food-discussion subreddit, even though the closing invites conversation.; R7: The subreddit rules are unverified (target_rules_verified is false), and the post text itself does not carry the reminder. The owner must read r/greekfood's rules before posting."
+  }
+ ],
+ "checklist": [
+  {
+   "rule": "R1",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The post opens with 'Owner of Café Athena here,' and the title repeats it.",
+   "cite": "R1",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R2",
+   "level": "hard",
+   "result": "fail",
+   "reason": "The title says 'on Garnet Ave', which matches fact:address. The body claims match the facts: open since 1990, Greek, Pacific Beach, happy hour daily 3–6pm, full bar, Greek-mythology cocktails, vegan and gluten-free options. The one exception is 'Greek-mythology cocktails' in the body, which is listed under known_for and so is supported. Nothing contradicts the facts, so R2 would pass on content, but 'daily' and the other claims should be confirmed against fact:owner_confirmed_note.",
+   "cite": "fact:owner_confirmed_note",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R3",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The post is written in the owner's own voice and contains no invented customer quotes or reviews.",
+   "cite": "R3",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R4",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The post offers no incentive and does not ask for Yelp or any other reviews.",
+   "cite": "R4",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R5",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The post makes no superlatives such as 'best' or 'most authentic'.",
+   "cite": "R5",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R6",
+   "level": "soft",
+   "result": "fail",
+   "reason": "The title and first lines lead with a happy hour promotion, which reads partly like an ad in a food-discussion subreddit, even though the closing invites conversation.",
+   "cite": "R6",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R7",
+   "level": "soft",
+   "result": "fail",
+   "reason": "We couldn't check this subreddit's rules - read them before posting.",
+   "cite": "R7",
+   "by": "code"
+  }
+ ],
+ "verdict": "Don't post",
+ "summary": "Verdict: Don't post. Passed: R1, R3, R4, R5. Failed: R2 (The title says 'on Garnet Ave', which matches fact:address. The body claims match the facts: open since 1990, Greek, Pacific Beach, happy hour daily 3–6pm, full bar, Greek-mythology cocktails, vegan and gluten-free options. The one exception is 'Greek-mythology cocktails' in the body, which is listed under known_for and so is supported. Nothing contradicts the facts, so R2 would pass on content, but 'daily' and the other claims should be confirmed against fact:owner_confirmed_note.); R6 (The title and first lines lead with a happy hour promotion, which reads partly like an ad in a food-discussion subreddit, even though the closing invites conversation.); R7 (We couldn't check this subreddit's rules - read them before posting.). Suggested edit: yes - see below.",
+ "suggested_edit": "Owner of Café Athena here. We're a Greek restaurant in Pacific Beach, San Diego, and we've been open since 1990. If you're ever in the area, we do a happy hour daily from 3 to 6pm, and our full bar makes Greek-mythology cocktails. We also have vegan and gluten-free options. I'm happy to answer questions about Greek dishes, the menu, or how we do things, and I'd like to hear what you enjoy cooking or eating at home.",
+ "rejected_citations": [],
+ "calls": 4,
+ "first_cost": 0.0595,
+ "prompt_version": "review-v1",
+ "label": "Two AI agents reviewed this. You decide."
+}
