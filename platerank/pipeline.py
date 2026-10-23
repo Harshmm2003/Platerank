@@ -1,0 +1,387 @@
+"""The whole pipeline as plain functions, for the web app (api.py) and the checks.
+
+Setup -> Discovery -> Analysis -> 3 Action tracks -> owner approval -> Measurement.
+Nothing here is new logic: it calls the existing engines in the same order app.py
+(Streamlit) does, and packs the results into one JSON-friendly bundle organised by
+the five owner questions. Every number keeps its provenance label (LIVE / CACHED /
+DEMO / FAILED, SAMPLE, web-found, owner-entered).
+"""
+import json, time
+from collections import Counter
+from pathlib import Path
+from urllib.parse import urlparse
+
+import pandas as pd
+
+from . import llm
+from .queries import generate_queries, example_queries
+from .discovery import run_discovery, FAILED, LIVE, CACHED, DEMO
+from .analysis import scorecard, by_category, by_dimension, competitor_frequency, ai_recommended
+from .scrape import audit_website, diagnose
+from .sources_audit import audit_sources, prioritized_gaps, load_demo_sources, load_sources, save_sources
+from .reviews_vfm import (load_demo as load_reviews_demo, load_reviews, analyse_restaurant, area_benchmark,
+                          benchmark_label, price_scenario)
+from .creators import load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places
+from .content_gen import faq_page, schema_markup, outreach_email
+from .store import (save_run, save_answers, load_runs, load_profile, load_example_profile, restaurant_dir,
+                    DATA)
+
+EXAMPLE_SLUG = "example"
+EXAMPLE_DIR = DATA / "example_state"   # runtime state for the SAMPLE example (git-ignored)
+
+QUESTIONS = {
+    "rank": "Where do I rank?",
+    "why": "Why are competitors beating me?",
+    "change": "What should I change?",
+    "make": "Can you make the changes?",
+    "improve": "Did my visibility improve?",
+}
+
+
+# ------------------------------------------------------------------ profile helpers
+def get_profile(slug: str) -> dict | None:
+    if slug == EXAMPLE_SLUG:
+        return load_example_profile()
+    for p in (DATA / "live").glob("*/profile.json"):
+        if p.parent.name == slug:
+            return json.loads(p.read_text(encoding="utf-8"))
+    return None
+
+
+def set_pinned(slug: str, pinned: bool) -> dict:
+    """Pin/unpin a saved restaurant so the Home screen focuses on it. Stored as "pinned" in its profile.json."""
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("The sample restaurant can't be pinned - pin one of your own restaurants instead.")
+    p = get_profile(slug)
+    if p is None:
+        raise ValueError("That restaurant isn't saved yet.")
+    p["pinned"] = bool(pinned)
+    _write(DATA / "live" / slug / "profile.json", p)
+    return p
+
+
+def state_dir(slug: str) -> Path:
+    return EXAMPLE_DIR if slug == EXAMPLE_SLUG else DATA / "live" / slug
+
+
+def _read(path: Path, default):
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+
+
+def _write(path: Path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+
+
+def names_of(profile: dict) -> list[str]:
+    return [c["name"] for c in profile.get("competitors", [])]
+
+
+def aliases_of(profile: dict) -> dict:
+    return ({c["name"]: c.get("aliases", []) for c in profile.get("competitors", [])}
+            | {profile["name"]: profile.get("aliases", [])})
+
+
+def available_platforms() -> list[str]:
+    import os
+    return (["claude"] if llm.has_key() else []) + (["gemini"] if (os.getenv("GOOGLE_API_KEY") or "").strip() else [])
+
+
+def cached_platforms(slug: str) -> dict:
+    """Platforms with saved real answers for this restaurant -> how many (re-showing them is free)."""
+    profile = get_profile(slug)
+    if slug == EXAMPLE_SLUG or profile is None:
+        return {}
+    cache = _read(restaurant_dir(profile["name"]) / "answers.json", {})
+    return dict(Counter(k.split("|", 1)[0] for k in cache))
+
+
+def estimate_calls(slug: str, runs: int, platforms: list[str]) -> dict:
+    """How many new calls a run could make, and a rough cost (from tools/check_live.py measurements)."""
+    profile = get_profile(slug)
+    n = len(example_queries()) if slug == EXAMPLE_SLUG else len(generate_queries(profile))
+    per_call = {"claude-haiku-5-5": 0.03, "claude-sonnet-5-5": 0.08, "claude-opus-5-5": 0.15}.get(llm.discovery_model(), 0.15)
+    live = [p for p in platforms if p == "claude"]
+    return {"questions": n, "runs": runs, "platforms": platforms, "max_calls": n * runs * len(platforms),
+            "cached": cached_platforms(slug), "model": llm.discovery_model(),
+            "rough_max_cost_usd": round(n * runs * len(live) * per_call, 2)}
+
+
+# ------------------------------------------------------------------ Discovery
+def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | None = None,
+        web_search: bool = True, progress=None, should_stop=None) -> dict:
+    """Runs Discovery for one restaurant and saves the rows. Returns run meta."""
+    profile = get_profile(slug)
+    if profile is None:
+        raise ValueError("Unknown restaurant")
+    is_example = slug == EXAMPLE_SLUG
+    target, names = profile["name"], names_of(profile)
+    if not names:
+        raise ValueError("Add at least one competitor first.")
+    queries = example_queries() if is_example else generate_queries(profile)
+    chosen = ["demo"] if is_example else (platforms or available_platforms() or list(cached_platforms(slug)))
+    if not chosen:
+        raise ValueError("No AI key in .env - add ANTHROPIC_API_KEY to run a live check, or try the sample.")
+    rows = []
+    for platform in chosen:
+        opts = ({"web_search": web_search, "location": llm.location_for(profile)} if platform == "claude" else None)
+        rows += run_discovery(queries, target, names, platform, runs=1 if is_example else runs,
+                              aliases=aliases_of(profile),
+                              cache_path=None if is_example else restaurant_dir(target) / "answers.json",
+                              use_cache=reuse, progress=progress, ask_opts=opts, should_stop=should_stop)
+    ok = [r for r in rows if r["status"] != FAILED]
+    counts = {s: sum(r["status"] == s for r in rows) for s in (LIVE, CACHED, DEMO, FAILED)}
+    meta = {"ts": time.time(), "when": time.strftime("%Y-%m-%d %H:%M"), "platforms": chosen,
+            "runs": 1 if is_example else runs, "web_search": web_search and not is_example,
+            "counts": counts, "cost_usd": round(sum(r.get("cost_usd", 0) for r in rows), 3),
+            "questions": len(queries)}
+    _write(state_dir(slug) / "last_run.json", {"meta": meta, "rows": rows})
+    if ok and not is_example:
+        save_answers(target, rows)
+        card = scorecard(ok, target, names)
+        me = card[card.restaurant == target].iloc[0]
+        save_run(target, "+".join(chosen), {"mention_rate": float(me.mention_rate), "mentions": int(me.mentions),
+                                           "avg_rank": None if pd.isna(me.avg_rank) else float(me.avg_rank),
+                                           "share_of_voice": float(me.share_of_voice), "answers": len(ok),
+                                           "runs": runs, **{k.lower(): v for k, v in counts.items()}})
+    return meta
+
+
+# ------------------------------------------------------------------ owner data
+def save_approval(slug: str, key: str, text: str) -> dict:
+    path = state_dir(slug) / "approved.json"
+    data = _read(path, {})
+    data[key] = {"at": time.strftime("%Y-%m-%d %H:%M"), "text": text}
+    _write(path, data)
+    return data
+
+
+def remove_approval(slug: str, key: str) -> dict:
+    path = state_dir(slug) / "approved.json"
+    data = _read(path, {})
+    data.pop(key, None)
+    _write(path, data)
+    return data
+
+
+def run_site_audit(slug: str) -> dict:
+    """Live audit of the restaurant's site vs the most-mentioned competitor (from the last run).
+    The SAMPLE example uses its SAMPLE audit records."""
+    profile = get_profile(slug)
+    last = _read(state_dir(slug) / "last_run.json", None)
+    names = names_of(profile)
+    top = names[0] if names else None
+    if last:
+        ok = [r for r in last["rows"] if r["status"] != FAILED]
+        card = scorecard(ok, profile["name"], names)
+        rivals = card[card.restaurant != profile["name"]]
+        if not rivals.empty:
+            top = rivals.iloc[0].restaurant
+    if not top:
+        raise ValueError("Add competitors first.")
+    if slug == EXAMPLE_SLUG:
+        src = load_demo_sources()
+        out = {profile["name"]: {"audit": src[profile["name"]]["website"], "source": "SAMPLE record"},
+               top: {"audit": src.get(top, {}).get("website", {}), "source": "SAMPLE record"}}
+    else:
+        urls = {c["name"]: c.get("website", "") for c in profile.get("competitors", [])}
+        out = {}
+        for n, u in ((profile["name"], profile.get("website", "")), (top, urls.get(top, ""))):
+            if not u:
+                out[n] = {"audit": {}, "source": "no website on file"}
+                continue
+            a = audit_website(u)
+            out[n] = ({"audit": {}, "source": f"couldn't fetch {u} ({a['error'][:80]})"} if "error" in a
+                      else {"audit": a, "source": f"LIVE fetch of {u} at {time.strftime('%H:%M')}"})
+    _write(state_dir(slug) / "site_audit.json", out)
+    return out
+
+
+def save_reviews_text(slug: str, restaurant: str, avg_rating: float, review_count: int | None,
+                      source: str, text: str) -> dict:
+    """Owner-pasted REAL reviews, one per line as 'rating | text'."""
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("The sample restaurant's reviews are fixed SAMPLE data.")
+    if not source.strip():
+        raise ValueError("Say where the reviews were copied from (e.g. Google Maps).")
+    parsed, bad = [], 0
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        left, sep, body = line.partition("|")
+        try:
+            rating = int(float(left.strip()))
+            assert sep and 1 <= rating <= 5 and body.strip()
+            parsed.append({"rating": rating, "text": body.strip()})
+        except Exception:
+            bad += 1
+    if not parsed:
+        raise ValueError("No reviews read. Use one review per line:  5 | Great fish, fair price.")
+    profile = get_profile(slug)
+    path = restaurant_dir(profile["name"]) / "reviews.json"
+    data = load_reviews(path) or {"restaurants": {}}
+    listing = load_sources(restaurant_dir(profile["name"]) / "sources.json").get(restaurant, {})
+    data["restaurants"][restaurant] = {"avg_rating": float(avg_rating), "review_count": int(review_count or len(parsed)),
+                                       "price_level": listing.get("listings", {}).get("google", {}).get("price_level"),
+                                       "reviews": parsed, "source": source.strip()}
+    _write(path, data)
+    return {"saved": len(parsed), "skipped_lines": bad}
+
+
+def save_listing(slug: str, restaurant: str, google: dict, source: str):
+    """Rating / review count / price level for one restaurant (owner-checked), into sources.json."""
+    profile = get_profile(slug)
+    path = restaurant_dir(profile["name"]) / "sources.json"
+    data = load_sources(path)
+    entry = data.setdefault(restaurant, {"listings": {}, "mentions": {}})
+    entry.setdefault("listings", {})["google"] = {k: v for k, v in google.items() if v is not None}
+    entry["source"] = source
+    save_sources(path, data)
+    return entry
+
+
+# ------------------------------------------------------------------ the results bundle
+def _domain(url: str) -> str:
+    d = urlparse(url).netloc.lower()
+    return d[4:] if d.startswith("www.") else d
+
+
+def results(slug: str) -> dict | None:
+    profile = get_profile(slug)
+    last = _read(state_dir(slug) / "last_run.json", None)
+    if profile is None or not last:
+        return None
+    is_example = slug == EXAMPLE_SLUG
+    target, names = profile["name"], names_of(profile)
+    rdir = restaurant_dir(target)
+    all_rows, meta = last["rows"], last["meta"]
+    rows = [r for r in all_rows if r["status"] != FAILED]
+    approvals = _read(state_dir(slug) / "approved.json", {})
+    out = {"restaurant": target, "slug": slug, "is_sample": is_example, "meta": meta, "questions": QUESTIONS,
+           "approvals": approvals}
+    if not rows:
+        out["empty"] = True
+        return out
+
+    # ---- 1. Where do I rank?
+    card = scorecard(rows, target, names)
+    cats = by_category(rows, target)
+    me = card[card.restaurant == target].iloc[0]
+    rivals = card[card.restaurant != target]
+    top = rivals.iloc[0] if not rivals.empty else None
+    lost = cats[cats.mention_rate == 0].category.tolist()
+    out["rank"] = {
+        "mention_rate": float(me.mention_rate), "mentions": int(me.mentions), "answers": len(rows),
+        "avg_rank": None if pd.isna(me.avg_rank) else float(me.avg_rank),
+        "share_of_voice": float(me.share_of_voice),
+        "top_competitor": None if top is None else {"name": top.restaurant, "mention_rate": float(top.mention_rate)},
+        "scorecard": json.loads(card.to_json(orient="records")),
+        "by_category": json.loads(cats.sort_values("mention_rate").to_json(orient="records")),
+        "categories_at_zero": lost,
+        "answers_list": [{"query": r["query"], "category": r["category"], "platform": r["platform"],
+                          "model": r.get("model", ""), "run": r["run_id"], "status": r["status"],
+                          "mentions": r["ordered_mentions"], "mentioned": r["mentioned"], "rank": r["rank"],
+                          "answer": r["answer"], "note": r.get("note", ""), "sources": r.get("sources", [])}
+                         for r in all_rows],
+    }
+
+    # ---- 2. Why are competitors beating me?
+    src_data = load_demo_sources() if is_example else load_sources(rdir / "sources.json")
+    site = _read(state_dir(slug) / "site_audit.json", {})
+    audit = audit_sources(target, names, src_data)
+    for n, a in site.items():
+        if a.get("audit"):
+            audit.setdefault(n, {"listings": {}, "mentions": {}})["website"] = a["audit"]
+    cat_rates = {r["category"]: r["mention_rate"] for r in out["rank"]["by_category"]}
+    gaps = prioritized_gaps(audit, target, cat_rates)
+    site_gaps = []
+    if len(site) == 2 and all(v.get("audit") for v in site.values()):
+        comp = next(n for n in site if n != target)
+        site_gaps = diagnose(site[target]["audit"], site[comp]["audit"], comp)
+    domains = Counter(_domain(s["url"]) for r in rows for s in (r.get("sources") or []) if s.get("url"))
+    out["why"] = {
+        "gaps": gaps, "site_gaps": site_gaps, "site_audit": site,
+        "ai_recommends_instead": ai_recommended(rows, [target] + names)[:15],
+        "competitor_frequency": json.loads(competitor_frequency(rows).head(12).to_json(orient="records")),
+        "sources_ai_used": [{"domain": d, "answers": k} for d, k in domains.most_common(15)],
+        "listings_note": ("SAMPLE listings and mention counts." if is_example else
+                          ("Listings from sources.json." if src_data else
+                           "No ratings / review counts saved yet - use 'Find public ratings' to fill them.")),
+        "listings": {n: d.get("listings", {}).get("google", {}) | {"source": d.get("source", "")}
+                     for n, d in src_data.items() if n in [target] + names},
+    }
+    lost_categories = [c for c, rate in cat_rates.items() if rate < 0.34] or list(cat_rates)[:2]
+
+    # ---- Value-for-Money (feeds 'change')
+    reviews = load_reviews_demo() if is_example else load_reviews(rdir / "reviews.json")
+    bench = area_benchmark(profile.get("competitor_menus", {}))
+    lv = [d.get("listings", {}).get("google", {}).get("price_level") for n, d in src_data.items() if n in names]
+    lv = [x for x in lv if x]
+    area_pl = round(sum(lv) / len(lv), 2) if lv else None
+    tiers = by_dimension(rows, target, "price_tier")
+    cheap_rate = float(tiers.query("price_tier=='cheap'")["mention_rate"].iloc[0]) if "cheap" in list(tiers["price_tier"]) else 0.0
+    vfm, target_analysis = None, None
+    if reviews:
+        comp_menus = {n: {"hero_dish_price": m.get("entree_price"), "anchor_price": m.get("anchor_price")}
+                      for n, m in profile.get("competitor_menus", {}).items()}
+        analyses = []
+        for name, data in reviews["restaurants"].items():
+            menu = profile.get("menu", {}) if name == target else comp_menus.get(name, {})
+            a = analyse_restaurant(name, data, menu, bench, cheap_rate if name == target else 0.0, area_pl,
+                                   profile.get("anchor_item") or "everyday item")
+            a["source"] = data.get("source", "SAMPLE" if is_example else "")
+            analyses.append(a)
+            if name == target:
+                target_analysis = a
+        vfm = {"analyses": analyses, "benchmark": bench, "benchmark_label": benchmark_label(bench),
+               "area_price_level": area_pl, "area_price_level_n": len(lv)}
+    menu = profile.get("menu", {})
+    scenario = (price_scenario(menu.get("hero_dish_name") or "Hero dish", menu["hero_dish_price"],
+                               bench["entree_avg"], bench["entree_avg"])
+                if menu.get("hero_dish_price") and bench.get("entree_avg") else None)
+
+    # ---- 3. What should I change?  (every gap, routed to the engine that fixes it)
+    moves = [{"title": g["gap"], "evidence": g["evidence"], "route": g["action"], "priority": g["priority"],
+              "categories": g["affected_categories"]} for g in gaps]
+    moves += [{"title": s, "evidence": "Website audit vs top competitor", "route": "standard", "priority": None,
+               "categories": []} for s in site_gaps if not s.startswith("No structural gaps")]
+    if target_analysis:
+        moves += [{"title": f"{r['area']}: {r['recommendation']}", "evidence": r["evidence"], "quote": r["example_quote"],
+                   "route": "vfm", "priority": None, "categories": []} for r in target_analysis["recommendations"]]
+    out["change"] = {"moves": moves, "lost_categories": lost_categories, "vfm": vfm,
+                     "vfm_needs_reviews": reviews is None, "price_scenario": scenario}
+
+    # ---- 4. Can you make the changes?  (drafts; owner approves each)
+    t_site = site.get(target, {}).get("audit") or (src_data.get(target, {}).get("website", {}) if is_example else {})
+    weak = [k for k, v in (target_analysis or {}).get("aspects", {}).items()
+            if v["pos_ratio"] is not None and v["pos_ratio"] < 0.5 and v["mentions"] >= 3]
+    facts = {"dietary_tags": t_site.get("dietary_tags_found"), "hero_dish": menu.get("hero_dish_name"),
+             "hero_price": menu.get("hero_dish_price"), "anchor_item": profile.get("anchor_item"),
+             "anchor_price": menu.get("anchor_price"), "weak_aspects": weak,
+             "address": profile.get("address"), "hours": profile.get("hours")}
+    items = ([{"name": menu["hero_dish_name"], "price": menu["hero_dish_price"]}]
+             if menu.get("hero_dish_name") and menu.get("hero_dish_price") else [])
+    pool = load_demo_creators() if is_example else load_live_creators()
+    creators = []
+    for c in match_creators(pool, lost_categories, local=local_places(profile)):
+        brief = content_briefs(c, profile, lost_categories)[0]
+        creators.append({**c, "brief": brief, "outreach": outreach_draft(c, profile, brief)})
+    out["make"] = {
+        "drafts": [
+            {"key": "faq_page", "title": "FAQ page", "kind": "text", "text": faq_page(target, profile["area"], facts)},
+            {"key": "schema_markup", "title": "Website schema (paste into the site's <head>)", "kind": "code",
+             "text": schema_markup(target, profile.get("website", ""), items, cuisine=profile.get("cuisine"))},
+            {"key": "outreach_email", "title": "Pitch to local food writers", "kind": "text",
+             "text": outreach_email(profile)},
+        ],
+        "creators": creators,
+        "creators_note": ("SAMPLE creator profiles." if is_example else
+                          ("Verified creators from data/live/creators_live.json." if pool else
+                           "No verified creators added yet (Phase 5).")),
+    }
+
+    # ---- 5. Did my visibility improve?
+    hist = [] if is_example else load_runs(target)
+    out["improve"] = {"history": hist, "note": "Same-day changes are directional - AI answers vary run to run. "
+                                               "The claim is the repeated re-test, not an instant jump."}
+    return out

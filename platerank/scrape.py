@@ -125,24 +125,49 @@ MENU_PROMPT = ("Read this restaurant menu. List every dish or drink that has a p
                "under, or empty string). Copy names and prices exactly as printed; skip items without a price; "
                "never guess a price.")
 
-def read_menu_file(data: bytes, mime: str) -> list[dict]:
-    """Read dishes + prices from a menu PHOTO, SCREENSHOT or PDF with Gemini (vision).
-    Returns [{name, price, section}] for the owner to check and pick from - never saved
-    without the owner choosing items."""
-    import os
-    from google import genai
-    from google.genai import types
-    from .discovery import _gemini_busy_safe, _json_from
-    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
-    resp, _ = _gemini_busy_safe(client, [types.Part.from_bytes(data=data, mime_type=mime), MENU_PROMPT])
+def _menu_items(parsed) -> list[dict]:
     items = []
-    for it in _json_from(resp.text or "[]"):
+    for it in parsed:
         try:
             items.append({"name": str(it["name"]).strip(), "price": float(it["price"]),
                           "section": str(it.get("section") or "").strip()})
         except (KeyError, TypeError, ValueError):
             continue
     return items
+
+def read_menu_file(data: bytes, mime: str) -> list[dict]:
+    """Read dishes + prices from a menu PHOTO, SCREENSHOT, PDF or page text.
+    Claude when an Anthropic key exists (reads PDFs and images natively), else Gemini.
+    Returns [{name, price, section}] for the owner to check and pick from - never saved
+    without the owner choosing items."""
+    from . import llm
+    if llm.has_key():
+        import base64
+        if mime == "text/plain":
+            block = {"type": "text", "text": "MENU TEXT:\n" + data.decode("utf-8", "ignore")[:60000]}
+        elif mime == "application/pdf":
+            block = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                                     "data": base64.b64encode(data).decode()}}
+        else:
+            block = {"type": "image", "source": {"type": "base64", "media_type": mime,
+                                                  "data": base64.b64encode(data).decode()}}
+        r = llm.claude_call([block, {"type": "text", "text": MENU_PROMPT}], max_tokens=16000, effort="low")
+        return _menu_items(llm.json_from(r.text or "[]"))
+    import os
+    from google import genai
+    from google.genai import types
+    from .discovery import _gemini_busy_safe, _json_from
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    resp, _ = _gemini_busy_safe(client, [types.Part.from_bytes(data=data, mime_type=mime), MENU_PROMPT])
+    return _menu_items(_json_from(resp.text or "[]"))
+
+def read_menu_from_link(url: str) -> tuple[list[dict], str]:
+    """Menu link -> items. A PDF is downloaded; a web page's text is read. Returns (items, source)."""
+    if url.lower().split("?")[0].endswith(".pdf"):
+        return read_menu_file(fetch_pdf(url), "application/pdf"), url
+    html = requests.get(url, timeout=15, headers=HEADERS).text
+    text = BeautifulSoup(html, "html.parser").get_text("\n", strip=True)
+    return read_menu_file(text.encode("utf-8"), "text/plain"), url
 
 def fetch_pdf(url: str) -> bytes:
     """Download one menu PDF (used when a site's menu is PDF-only)."""

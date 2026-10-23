@@ -17,6 +17,8 @@ check("trailing street number dropped", "Sushi of Gari" in d.name_variants("Sush
 r = d._rank_of("YONO Sushi", "Try KazuNori first, then Yono Sushi, or Sushi of Gari.",
                ["KazuNori: The Original Hand Roll Bar", "Sushi of Gari 46"])
 check("case-insensitive + short names, in answer order", r["ordered_mentions"] == ["KazuNori: The Original Hand Roll Bar", "YONO Sushi", "Sushi of Gari 46"] and r["rank"] == 2, r)
+r = d._rank_of("Café Athena", "Try Cafe Athena on Garnet Ave, then CAFÉ ATHENA again.", [])
+check("accents ignored: 'Cafe' matches 'Café'", r["mentioned"] and r["rank"] == 1, r)
 r = d._rank_of("YONO Sushi", "Yonomi Sushi is great.", [])
 check("no false hit inside another word", not r["mentioned"], r)
 r = d._rank_of("YONO Sushi", "Go to YONO near Penn Station.", [], {"YONO Sushi": ["YONO"]})
@@ -50,3 +52,4 @@ check("fresh run that fails falls back to saved answer, labelled", rows3[0]["sta
 demo = d.run_discovery([Query("best healthy lunch near NYU", "healthy")], "Greenwich Kitchen", ["Sweetgreen"], "demo")
 check("demo rows labelled DEMO", demo[0]["status"] == d.DEMO, demo[0]["status"])
 print(f"\n{ok} passed, {fail} failed")
+sys.exit(1 if fail else 0)

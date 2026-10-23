@@ -43,6 +43,8 @@ def save_answers(target: str, rows: list[dict]) -> float:
     return run_ts
 
 def slugify(name: str) -> str:
+    import unicodedata  # 'Café Athena' -> 'cafe_athena'
+    name = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "restaurant"
 
 def restaurant_dir(name: str) -> Path:

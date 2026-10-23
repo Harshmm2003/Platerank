@@ -16,3 +16,8 @@ venv/
 # machine-specific editor / Claude Code preview config
 .claude/
 .vscode/
+
+# web app runtime state
+data/example_state/
+data/live/*/last_run.json
+web/node_modules/

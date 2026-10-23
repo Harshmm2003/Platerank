@@ -52,4 +52,6 @@ store.DB = Path(tempfile.mkdtemp()) / "runs.db"  # temp DB - never touches data/
 store.save_run(T, "demo", {"mention_rate": 0.17, "mentions": 5})
 check("store save/load (temp DB)", lambda: store.load_runs(T)[0]["mention_rate"])
 check("store.slugify", lambda: store.slugify("YONO Sushi!"))
+check("store.slugify drops accents", lambda: store.slugify("Café Athena") == "cafe_athena" or (_ for _ in ()).throw(AssertionError(store.slugify("Café Athena"))))
 print(f"\n{ok} passed, {fail} failed")
+sys.exit(1 if fail else 0)

@@ -15,6 +15,7 @@ A failed call is never replaced by a made-up answer.
 import json, os, re, time
 from pathlib import Path
 from .queries import Query
+from . import llm
 
 SAMPLE = Path(__file__).parent.parent / "data" / "sample_run.json"
 SYSTEM = ("You are a helpful local guide. Recommend 3-4 specific restaurants "
@@ -23,6 +24,11 @@ LIVE, CACHED, DEMO, FAILED = "LIVE", "CACHED", "DEMO", "FAILED"
 
 # ------------------------------------------------------------------ name matching
 def _norm(text: str) -> str:
+    """Lowercase, straight quotes, '&' -> 'and', and accents removed - so 'Café Athena',
+    'Cafe Athena' and 'CAFÉ ATHENA' all match (AI answers often drop the accent)."""
+    import unicodedata
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
     return (text.lower().replace("’", "'").replace("‘", "'").replace("&", "and"))
 
 def name_variants(name: str, aliases: list[str] | None = None) -> list[str]:
@@ -52,35 +58,25 @@ def _rank_of(target: str, answer: str, competitors: list[str], aliases: dict | N
     return {"mentioned": target in ordered, "rank": rank, "ordered_mentions": ordered}
 
 # ------------------------------------------------------------------ platforms
-# Models that accept server-side refusal fallbacks (routed by refusal category).
-FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 GEMINI_BACKUP = "gemini-3.5-flash"  # answered reliably when the default was overloaded (Oct 22)
 
 # Read at call time (not import time) so CLAUDE_MODEL / GEMINI_MODEL in .env apply.
 def claude_model() -> str:
-    return os.getenv("CLAUDE_MODEL", "claude-opus-5-5")
+    return llm.discovery_model()
 
 def gemini_model() -> str:
     return os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
-class QuotaError(Exception):
-    """The platform refused because the key's quota is used up (HTTP 429)."""
+QuotaError = llm.QuotaError          # rate limit / quota used up: stop calling for the rest of the run
+ClaudeUnavailable = llm.ClaudeUnavailable  # bad key / no credit / tool off: also stop calling
 
-def ask_claude(query: str) -> tuple[str, str]:
-    import anthropic
-    client = anthropic.Anthropic()
-    model = claude_model()
-    extra = ({"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
-             if model in FALLBACK_MODELS else {})
-    try:
-        msg = client.beta.messages.create(model=model, max_tokens=16000,
-                                          output_config={"effort": "medium"},
-                                          system=SYSTEM, messages=[{"role": "user", "content": query}], **extra)
-    except anthropic.RateLimitError as e:
-        raise QuotaError(str(e)) from e
-    if msg.stop_reason == "refusal":
-        return "", msg.model  # logged as "not mentioned"; the raw-answers view shows the empty answer
-    return "".join(b.text for b in msg.content if b.type == "text"), msg.model
+def ask_claude(query: str, web_search: bool = True, location: dict | None = None) -> tuple[str, str, list]:
+    """Answer one customer question the way Claude does for a real user. With web_search=True Claude
+    looks things up first (like claude.ai does for local questions) and we keep the sources it used -
+    that's the evidence for 'why competitors win'. Returns (answer, model, sources)."""
+    tools = [llm.web_search_tool(max_uses=3, location=location)] if web_search else None
+    r = llm.claude_call(query, system=SYSTEM, model=llm.discovery_model(), tools=tools, max_tokens=8000)
+    return ("" if r.refused else r.text), r.model, r.sources, r.cost_usd
 
 def _gemini_busy_safe(client, contents, config=None, tries: int = 2):
     """Call Gemini; when it says 'busy' (5xx), wait briefly and retry, then try the
@@ -105,6 +101,8 @@ _gemini_client = None
 
 def ask_gemini(query: str) -> tuple[str, str]:
     global _gemini_client
+    if not (os.getenv("GOOGLE_API_KEY") or "").strip():
+        raise llm.ClaudeUnavailable("No GOOGLE_API_KEY in .env - only saved Gemini answers can be shown")
     from google import genai
     from google.genai import types
     if _gemini_client is None:
@@ -115,13 +113,7 @@ def ask_gemini(query: str) -> tuple[str, str]:
 ASK = {"claude": ask_claude, "gemini": ask_gemini}
 
 # ------------------------------------------------------------------ competitor suggestions
-def _json_from(text: str):
-    """Pull the first JSON array/object out of a model reply (tolerates ``` fences)."""
-    start = min([i for i in (text.find("["), text.find("{")) if i >= 0], default=-1)
-    end = max(text.rfind("]"), text.rfind("}"))
-    if start < 0 or end < start:
-        raise ValueError("no JSON in the reply")
-    return json.loads(text[start:end + 1])
+_json_from = llm.json_from
 
 def _site_responds(url: str) -> bool:
     import requests
@@ -131,6 +123,39 @@ def _site_responds(url: str) -> bool:
         return False
 
 def suggest_competitors(profile: dict, n: int = 6) -> dict:
+    """SETUP helper: real same-cuisine competitors near the target, as PROPOSALS for the owner.
+    Uses Claude + web search when an Anthropic key exists (web-verified, with sources);
+    otherwise falls back to the Gemini version below."""
+    if llm.has_key():
+        return _suggest_competitors_claude(profile, n)
+    return _suggest_competitors_gemini(profile, n)
+
+def _competitor_prompt(profile: dict, n: int) -> str:
+    where = ", ".join(x for x in (profile.get("address"), profile.get("neighbourhood"), profile.get("area"),
+                                  profile.get("city")) if x)
+    return (f"List up to {n} real, currently open {profile['cuisine']} restaurants in or near {where} that "
+            f"compete with {profile['name']} for the same customers. Do not include {profile['name']} itself "
+            f"or its sister brands. Only include places you found evidence for. Reply with ONLY a JSON array "
+            "of objects with keys: name, website (official site, or empty string if not sure), address, "
+            "why (one short phrase), source_url (the page that shows it exists).")
+
+def _suggest_competitors_claude(profile: dict, n: int) -> dict:
+    r = llm.claude_call("Search the web first. " + _competitor_prompt(profile, n),
+                        tools=[llm.web_search_tool(max_uses=4, location=llm.location_for(profile))],
+                        max_tokens=6000)
+    suggestions = [s for s in llm.json_from(r.text or "[]") if isinstance(s, dict) and s.get("name")]
+    _check_sites(suggestions)
+    return {"suggestions": suggestions, "sources": r.sources, "grounded": r.searches > 0,
+            "engine": f"Claude ({r.model}) + web search", "cost_usd": r.cost_usd}
+
+def _check_sites(suggestions: list[dict]):
+    from concurrent.futures import ThreadPoolExecutor  # check all sites at once, not one by one
+    with ThreadPoolExecutor(8) as pool:
+        ok = list(pool.map(lambda s: _site_responds(s["website"]) if s.get("website") else None, suggestions))
+    for s, responds in zip(suggestions, ok):
+        s["site_responds"] = responds
+
+def _suggest_competitors_gemini(profile: dict, n: int = 6) -> dict:
     """SETUP helper: ask Gemini for real same-cuisine restaurants near the target.
     Tries Google Search grounding first; if the key's plan has no search quota
     (free tier), falls back to Gemini WITHOUT search and says so (grounded=False).
@@ -157,18 +182,15 @@ def suggest_competitors(profile: dict, n: int = 6) -> dict:
         resp, _ = _gemini_busy_safe(client, prompt)
         grounded = False
     suggestions = [s for s in _json_from(resp.text or "") if isinstance(s, dict) and s.get("name")]
-    from concurrent.futures import ThreadPoolExecutor  # check all sites at once, not one by one
-    with ThreadPoolExecutor(8) as pool:
-        ok = list(pool.map(lambda s: _site_responds(s["website"]) if s.get("website") else None, suggestions))
-    for s, responds in zip(suggestions, ok):
-        s["site_responds"] = responds
+    _check_sites(suggestions)
     sources = []
     meta = resp.candidates[0].grounding_metadata if resp.candidates else None
     for ch in (getattr(meta, "grounding_chunks", None) or []):
         web = getattr(ch, "web", None)
         if web and getattr(web, "uri", None):
             sources.append({"title": web.title, "url": web.uri})
-    return {"suggestions": suggestions, "sources": sources, "grounded": grounded}
+    return {"suggestions": suggestions, "sources": sources, "grounded": grounded,
+            "engine": f"Gemini ({gemini_model()})" + (" + Google Search" if grounded else " - NOT web-verified")}
 
 # ------------------------------------------------------------------ the run
 def _load_cache(path: Path | None) -> dict:
@@ -181,10 +203,14 @@ def _save_cache(path: Path | None, cache: dict):
 
 def run_discovery(queries: list[Query], target: str, competitors: list[str],
                   platform: str = "demo", runs: int = 1, aliases: dict | None = None,
-                  cache_path: Path | None = None, use_cache: bool = True, progress=None) -> list[dict]:
+                  cache_path: Path | None = None, use_cache: bool = True, progress=None,
+                  ask_opts: dict | None = None, should_stop=None) -> list[dict]:
     """One row per (run, query). use_cache=True reuses saved live answers (no API call);
     use_cache=False asks the platform fresh and only falls back to a saved answer if the
-    call fails. progress(done, total, note) is called after every row."""
+    call fails. progress(done, total, note) is called after every row.
+    ask_opts are passed to the platform (e.g. Claude's web_search + location).
+    should_stop() lets the UI cancel a run; answers already received are kept.
+    Rows carry 'sources' (pages the AI used, when the platform reports them) and 'cost_usd'."""
     results = []
     sample = cache = {}
     if platform == "demo":
@@ -198,25 +224,38 @@ def run_discovery(queries: list[Query], target: str, competitors: list[str],
             key = f"{platform}|run{run_id}|{q.text}"
             saved = cache.get(key)
             row = {"query": q.text, "category": q.category, "price_tier": getattr(q, "price_tier", "any"),
-                   "occasion": getattr(q, "occasion", "any"), "platform": platform, "run_id": run_id}
+                   "occasion": getattr(q, "occasion", "any"), "platform": platform, "run_id": run_id,
+                   "sources": [], "cost_usd": 0.0}
+            if should_stop and should_stop() and not quota_hit:
+                quota_hit = "stopped by you"
             if platform == "demo":
                 row.update(status=DEMO, model="sample", answer=sample.get(q.text, ""), note="SAMPLE answer")
             elif saved and use_cache:
                 row.update(status=CACHED, model=saved["model"], answer=saved["answer"],
-                           note=f"saved live answer from {saved['ts']}")
+                           sources=saved.get("sources", []), note=f"saved live answer from {saved['ts']}")
             elif quota_hit:
                 row.update(status=CACHED if saved else FAILED, model=saved["model"] if saved else "",
                            answer=saved["answer"] if saved else "",
-                           note=("quota used up - " + ("saved answer used" if saved else "no answer")))
+                           sources=saved.get("sources", []) if saved else [],
+                           note=(f"{quota_hit} - " + ("saved answer used" if saved else "no answer")))
             else:
                 try:
-                    answer, model = ask(q.text)
-                    row.update(status=LIVE, model=model, answer=answer, note="")
-                    cache[key] = {"answer": answer, "model": model, "ts": time.strftime("%Y-%m-%d %H:%M")}
+                    got = ask(q.text, **ask_opts) if ask_opts else ask(q.text)
+                    answer, model = got[0], got[1]
+                    sources = got[2] if len(got) > 2 else []
+                    row.update(status=LIVE, model=model, answer=answer, note="", sources=sources,
+                               cost_usd=got[3] if len(got) > 3 else 0.0)
+                    cache[key] = {"answer": answer, "model": model, "ts": time.strftime("%Y-%m-%d %H:%M"),
+                                  "sources": sources}
                     _save_cache(cache_path, cache)  # saved straight away, so a stopped run keeps its answers
                 except Exception as e:
-                    reason = "quota used up" if isinstance(e, QuotaError) else f"{type(e).__name__}"
                     if isinstance(e, QuotaError):
+                        reason = "quota used up"
+                    elif isinstance(e, ClaudeUnavailable):
+                        reason = str(e)
+                    else:
+                        reason = f"{type(e).__name__}"
+                    if isinstance(e, (QuotaError, ClaudeUnavailable)):
                         quota_hit = reason  # stop calling for the rest of this run
                     row.update(status=CACHED if saved else FAILED, model=saved["model"] if saved else "",
                                answer=saved["answer"] if saved else "",

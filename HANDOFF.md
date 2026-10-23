@@ -54,6 +54,20 @@ restaurant typed in — nothing restaurant-specific hardcoded.
 
 ---
 
+### ✅ Oct 23, 1-3am — new web app + Claude-first (branch `frontend-v2`)
+- **New UI** (`python run.py`): Home -> 3-step setup (search your restaurant in a dropdown and the public details
+  fill in from OpenStreetMap; competitors as checkboxes within a radius slider + "Ask Claude"; run) -> results in
+  5 tabs named after the owner questions. Owner-only facts (hero dish, prices) sit in a collapsed optional box.
+  Streamlit `app.py` untouched as a fallback.
+- **Claude is the main platform** (`platerank/llm.py`): Discovery answers with web search (and the sources each
+  answer used -> "Websites the AI relied on"), competitor suggestions with sources, menu reading (PDF/photo),
+  public facts lookup (price level, rating, review count, each with a link). Gemini stays optional.
+- **Cost tracking** per answer; estimate shown before a run; stop button keeps answers that arrived.
+- **Tests:** `python check.py` (69 offline checks + frontend type check), `tools/check_live.py` for the real key,
+  `tools/install_hooks.py` blocks a push when checks fail. Prompts for the next phases: `PROMPTS.md`.
+- Not yet verified on the live internet from the build machine: OpenStreetMap search/radius and the Claude key
+  (the build sandbox blocks both) - run `python check.py --live` and try the search box first thing.
+
 ## 2. What to build next
 
 ### Phase 5 — the two differentiator engines, live
