@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, City, Competitor, miles, Nearby, NearbyResult, PlaceDetails, PlaceHit, Profile, Source, Status } from "./api";
-import { Badge, Button, Card, ErrorNote, Field, inputCls, More, SourceLinks, cx } from "./ui";
+import { Badge, Button, Card, ErrorNote, Field, inputCls, More, SlowBar, SourceLinks, cx } from "./ui";
 import { go } from "./App";
 
 const PRICE = ["unknown", "$", "$$", "$$$", "$$$$"];
@@ -157,18 +157,6 @@ function LookupProgress({ stage, detail }: { stage: "idle" | "searching" | "deta
         ))}
       </div>
       {detail && <div className="mt-1 text-xs text-stone-500">{detail}</div>}
-    </div>
-  );
-}
-
-/** A bar that eases towards 90% while a slow call (Claude web search) runs. */
-function SlowBar({ label }: { label: string }) {
-  const [p, setP] = useState(5);
-  useEffect(() => { const t = window.setInterval(() => setP((x) => x + (90 - x) * 0.08), 400); return () => window.clearInterval(t); }, []);
-  return (
-    <div className="mt-3">
-      <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200"><div className="h-2 rounded-full bg-sky-500 transition-all duration-300" style={{ width: `${p}%` }} /></div>
-      <div className="mt-1 text-xs text-stone-500">{label}</div>
     </div>
   );
 }
@@ -341,6 +329,8 @@ function StepRestaurant({ slug, initial, status }: { slug: string | null; initia
             <Field label="Signature dishes" hint="comma-separated — used in the AI questions"><input className={inputCls} value={(p.signature_terms || []).join(", ")} onChange={(e) => set("signature_terms", list(e.target.value))} /></Field>
             <Field label="Other names AI might use" hint="e.g. a short name"><input className={inputCls} value={(p.aliases || []).join(", ")} onChange={(e) => set("aliases", list(e.target.value))} /></Field>
             <Field label="Landmarks people search by" hint="e.g. a station or venue"><input className={inputCls} value={(p.landmarks || []).join(", ")} onChange={(e) => set("landmarks", list(e.target.value))} /></Field>
+            <Field label="Phone number" hint="used in the website schema"><input className={inputCls} value={p.phone || ""} onChange={(e) => set("phone", e.target.value)} /></Field>
+            <Field label="Year opened"><input type="number" min={1800} max={2100} className={inputCls} value={p.year_opened ?? ""} onChange={(e) => set("year_opened", e.target.value ? Number(e.target.value) : null)} /></Field>
             <Field label="What you're known for" hint="comma-separated, e.g. happy hour, cocktails, private events, catering, gluten-free — adds matching AI questions"><input className={inputCls} value={(p.highlights || []).join(", ")} onChange={(e) => set("highlights", list(e.target.value))} /></Field>
             <Field label="Other words for your cuisine" hint="e.g. a broader style people also search for"><input className={inputCls} value={(p.cuisine_alternates || []).join(", ")} onChange={(e) => set("cuisine_alternates", list(e.target.value))} /></Field>
             <Field label="Nicknames for your area" hint="e.g. the short name locals use"><input className={inputCls} value={(p.area_nicknames || []).join(", ")} onChange={(e) => set("area_nicknames", list(e.target.value))} /></Field>

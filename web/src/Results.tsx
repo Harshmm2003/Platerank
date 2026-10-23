@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, pct, Results as R } from "./api";
-import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, Field, inputCls, More, ROUTE_LABEL, SourceLinks, Stat, copy, cx, download } from "./ui";
+import { api, ApiError, pct, PackPiece, Results as R } from "./api";
+import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
 const TABS = [
@@ -347,7 +347,8 @@ function ReviewsForm({ r, reload }: { r: R; reload: () => void }) {
 }
 
 // ---------------------------------------------------------------- 4
-function Draft({ r, k, title, kind, text: initial, reload }: { r: R; k: string; title: string; kind: "text" | "code"; text: string; reload: () => void }) {
+function Draft({ r, k, title, kind, text: initial, reload, strict, note, file }: { r: R; k: string; title: string; kind: "text" | "code" | "json";
+  text: string; reload: () => void; strict?: boolean; note?: string; file?: string }) {
   const approved = r.approvals[k];
   const [text, setText] = useState(approved?.text || initial);
   const [busy, setBusy] = useState(false);
@@ -357,6 +358,7 @@ function Draft({ r, k, title, kind, text: initial, reload }: { r: R; k: string; 
     try { await api.post(`/api/restaurants/${r.slug}/approve`, { key: k, text, undo }); reload(); } catch (e) { setError((e as Error).message); }
     setBusy(false);
   }
+  const blocked = !text.trim() || text.includes("OWNER TO CONFIRM") || (kind === "json" && !validJson(text));
   return (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -364,13 +366,16 @@ function Draft({ r, k, title, kind, text: initial, reload }: { r: R; k: string; 
         {approved ? <Badge kind="LIVE">approved {approved.at}</Badge> : <Badge kind="neutral">draft</Badge>}
       </div>
       <textarea className={cx(inputCls, "mt-3 h-48 text-sm", kind === "code" && "font-mono")} value={text} readOnly={!!approved} onChange={(e) => setText(e.target.value)} />
+      {note && <p className="mt-1 text-xs text-stone-500">{note}</p>}
       {text.includes("OWNER TO CONFIRM") && <p className="mt-1 text-xs text-amber-800">Fill in each [OWNER TO CONFIRM] before approving — we don't guess facts.</p>}
+      {strict && kind === "json" && text.trim() && !validJson(text) && <p className="mt-1 text-xs text-red-700">This isn't valid JSON any more — check the last edit.</p>}
       <ErrorNote error={error} />
       <div className="mt-3 flex flex-wrap gap-2">
         {approved ? <Button kind="secondary" small busy={busy} onClick={() => approve(true)}>Undo approval</Button>
-          : <Button small busy={busy} onClick={() => approve()}>✓ Approve</Button>}
+          : <Button small busy={busy} onClick={() => approve()} disabled={strict && blocked}
+              title={strict && blocked ? "Fill in or delete every [OWNER TO CONFIRM] part first" : ""}>✓ Approve</Button>}
         <Button kind="ghost" small onClick={() => copy(text)}>Copy</Button>
-        <Button kind="ghost" small onClick={() => download(`${k}.txt`, text)}>Download</Button>
+        <Button kind="ghost" small disabled={!text.trim()} onClick={() => download(file || `${k}.txt`, text)}>Download</Button>
       </div>
       <p className="mt-2 text-xs text-stone-400">Approving only records your decision. PlateRank never publishes or sends anything.</p>
     </Card>
@@ -384,6 +389,7 @@ function Make({ r, reload }: { r: R; reload: () => void }) {
       <div className="grid gap-5 lg:grid-cols-2">
         {m.drafts.map((d) => <Draft key={d.key} r={r} k={d.key} title={d.title} kind={d.kind} text={d.text} reload={reload} />)}
       </div>
+      <ContentPackSection r={r} reload={reload} />
       <Card>
         <h3 className="font-semibold">Food creators to work with</h3>
         <p className="text-sm text-stone-500">{m.creators_note} YouTube counts most: AI assistants read and cite it.</p>
@@ -439,6 +445,78 @@ function Improve({ r }: { r: R }) {
         <p className="mt-2 text-xs text-stone-500">{r.improve.note}</p>
         <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run a fresh check</Button></div>
       </Card>
+    </div>
+  );
+}
+
+const validJson = (t: string) => { try { JSON.parse(t); return true; } catch { return false; } };
+
+const PACK_FILE: Record<string, string> = {
+  pack_restaurant_schema: "schema-restaurant.json", pack_faq_schema: "schema-faq.json", pack_menu_schema: "schema-menu.json",
+  pack_about: "about.txt", pack_menu_copy: "menu-descriptions.txt", pack_landing: "landing-page.html",
+};
+
+/** Website content pack: schemas built from facts + Claude-written wording (cached), each approved separately. */
+function ContentPackSection({ r, reload }: { r: R; reload: () => void }) {
+  const pack = r.make.pack;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [zipBusy, setZipBusy] = useState(false);
+  const generated = pack.generated;
+
+  async function write(regenerate: boolean) {
+    if (regenerate && !window.confirm("This replaces the current About, menu and landing-page text with a new version written by Claude. Continue?")) return;
+    setBusy(true); setError(null);
+    try { await api.post(`/api/restaurants/${r.slug}/content-pack`, { regenerate }); reload(); }
+    catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
+
+  async function downloadZip() {
+    setZipBusy(true); setError(null);
+    try {
+      const res = await fetch(`/api/restaurants/${r.slug}/website-pack.zip`);
+      if (!res.ok) throw new ApiError((await res.json().catch(() => ({}))).detail || "Couldn't build the download.");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = `${r.slug}-website-pack.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) { setError((e as Error).message); }
+    setZipBusy(false);
+  }
+
+  const approvedCount = pack.pieces.filter((p) => r.approvals[p.key]).length;
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold">Website content pack</h3>
+            <p className="text-sm text-stone-500">Ready-to-paste schema, About text, menu copy and a local landing page — written only from your saved facts.
+              Anything we don't know shows as [OWNER TO CONFIRM].</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {!pack.is_sample && (generated
+              ? <Button kind="secondary" small busy={busy} disabled={!pack.can_generate} onClick={() => write(true)}>Regenerate the text</Button>
+              : <Button small busy={busy} disabled={!pack.can_generate} onClick={() => write(false)}>Write the text</Button>)}
+            <Button small kind="secondary" busy={zipBusy} disabled={!approvedCount} onClick={downloadZip}
+              title={approvedCount ? "" : "Approve at least one piece first"}>Download website pack ({approvedCount} approved)</Button>
+          </div>
+        </div>
+        {busy && <SlowBar label="Claude is writing the About text, menu copy and landing page from your facts… (20–60 seconds)" />}
+        {pack.is_sample && <p className="mt-2 text-sm text-stone-500">The sample restaurant only shows the schemas — the written text is for your own restaurant.</p>}
+        {!pack.is_sample && !pack.can_generate && <p className="mt-2 text-sm text-stone-500">Add a Claude key to <code>.env</code> to write the text. The schemas below work without it.</p>}
+        {generated && <p className="mt-2 text-xs text-stone-500">Text written {generated.at}. It's saved — reloading doesn't rewrite it.</p>}
+        {pack.facts_changed && <p className="mt-2 rounded bg-amber-50 p-2 text-sm text-amber-900">Your facts changed since this text was written. Regenerate to use the new facts.</p>}
+        <ErrorNote error={error} />
+      </Card>
+      <div className="grid gap-5 lg:grid-cols-2">
+        {pack.pieces.map((p: PackPiece) => (
+          <Draft key={`${p.key}-${generated?.at || "none"}`} r={r} k={p.key} title={p.title} kind={p.kind} text={p.text} reload={reload} strict
+            file={PACK_FILE[p.key]} note={[p.note, p.flags.length ? `Marked for you to confirm (not in your facts): ${p.flags.join(", ")}` : ""].filter(Boolean).join(" ")} />
+        ))}
+      </div>
     </div>
   );
 }

@@ -52,6 +52,8 @@ export type Profile = {
   cuisine_alternates?: string[];
   area_nicknames?: string[];
   anchor_item?: string;
+  phone?: string;
+  year_opened?: number | null;
   menu?: { hero_dish_name?: string; hero_dish_price?: number | null; anchor_price?: number | null; source?: string };
   competitors?: Competitor[];
   competitor_menus?: Record<string, { entree_price?: number; anchor_price?: number; source?: string }>;
@@ -116,6 +118,7 @@ export type Results = {
     creators: { handle: string; name: string; platform: string; followers: number; relevance_score: number; why: string; verified?: boolean; source_url?: string;
       brief: { concept_title: string; hook: string; format: string; target_category: string; must_include_for_ai_citation: string[] }; outreach: string }[];
     creators_note: string;
+    pack: ContentPack;
   };
   improve: { history: { ts: number; platform: string; mention_rate: number; avg_rank: number | null; share_of_voice: number; answers: number }[]; note: string };
 };
@@ -123,3 +126,7 @@ export type Results = {
 export const pct = (x: number | null | undefined) => (x == null ? "—" : `${Math.round(x * 100)}%`);
 export const usd = (x: number | null | undefined) => (x == null ? "—" : `$${x.toFixed(x < 1 ? 2 : 0)}`);
 export const miles = (m: number | null) => (m == null ? "" : m < 160 ? `${m} m` : `${(m / 1609).toFixed(2)} mi`);
+
+export type PackPiece = { key: string; title: string; kind: "json" | "text" | "code"; text: string; note: string; flags: string[] };
+export type ContentPack = { pieces: PackPiece[]; is_sample: boolean; generated: { at: string; model: string } | null;
+  facts_changed: boolean; can_generate: boolean };

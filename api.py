@@ -12,7 +12,7 @@ if not os.getenv("PLATERANK_TESTING"):  # offline checks must never pick up the 
     load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -315,6 +315,25 @@ class ApproveIn(BaseModel):
 def approve(slug: str, body: ApproveIn):
     _profile_or_404(slug)
     return (pipeline.remove_approval(slug, body.key) if body.undo else pipeline.save_approval(slug, body.key, body.text))
+
+
+class PackIn(BaseModel):
+    regenerate: bool = False
+
+
+@app.post("/api/restaurants/{slug}/content-pack")
+def content_pack(slug: str, body: PackIn):
+    """Claude writes the pack's wording once (cached); regenerate=true asks again."""
+    _profile_or_404(slug)
+    pipeline.generate_content_pack(slug, body.regenerate)
+    return {"ok": True}
+
+
+@app.get("/api/restaurants/{slug}/website-pack.zip")
+def website_pack(slug: str):
+    p = _profile_or_404(slug)
+    return Response(pipeline.website_pack(slug), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{slugify(p["name"])}-website-pack.zip"'})
 
 
 # ------------------------------------------------------------------ frontend

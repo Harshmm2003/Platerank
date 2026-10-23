@@ -23,6 +23,7 @@ from .reviews_vfm import (load_demo as load_reviews_demo, load_reviews, analyse_
                           benchmark_label, price_scenario)
 from .creators import load_demo_creators, load_live_creators, match_creators, content_briefs, outreach_draft, local_places
 from .content_gen import faq_page, schema_markup, outreach_email
+from . import content_gen
 from .store import (save_run, save_answers, load_runs, load_profile, load_example_profile, restaurant_dir,
                     DATA)
 
@@ -178,6 +179,8 @@ def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | Non
 
 # ------------------------------------------------------------------ owner data
 def save_approval(slug: str, key: str, text: str) -> dict:
+    if key.startswith("pack_") and (not text.strip() or content_gen.CONFIRM in text):
+        raise ValueError("Fill in or delete every [OWNER TO CONFIRM] part first - website text is approved only when every fact is confirmed.")
     path = state_dir(slug) / "approved.json"
     data = _read(path, {})
     data[key] = {"at": time.strftime("%Y-%m-%d %H:%M"), "text": text}
@@ -273,6 +276,105 @@ def save_listing(slug: str, restaurant: str, google: dict, source: str):
 def _domain(url: str) -> str:
     d = urlparse(url).netloc.lower()
     return d[4:] if d.startswith("www.") else d
+
+
+# ------------------------------------------------------------------ website content pack (Action A)
+PACK_TITLES = {"pack_restaurant_schema": "Restaurant schema (JSON-LD)", "pack_faq_schema": "FAQ schema (JSON-LD)",
+               "pack_menu_schema": "Menu schema (JSON-LD)", "pack_about": "About us",
+               "pack_menu_copy": "Menu descriptions", "pack_landing": "Local landing page (HTML)"}
+
+
+def _pack_facts(slug: str, profile: dict, site_audit: dict | None = None, reviews: dict | None = None) -> dict:
+    if site_audit is None:
+        site_audit = _read(state_dir(slug) / "site_audit.json", {}).get(profile["name"], {}).get("audit")
+    if reviews is None and slug != EXAMPLE_SLUG:
+        reviews = (load_reviews(restaurant_dir(profile["name"]) / "reviews.json") or {}).get("restaurants", {}).get(profile["name"])
+    return content_gen.pack_facts(profile, site_audit, reviews)
+
+
+def generate_content_pack(slug: str, regenerate: bool = False) -> dict:
+    """Claude writes the wording (about / menu copy / landing page) from the fact sheet only, once.
+    The result is cached in content_pack.json; reloading never regenerates. regenerate=True asks Claude again."""
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("The content pack is for your own restaurant - the sample has no real facts to write from.")
+    profile = get_profile(slug)
+    path = state_dir(slug) / "content_pack.json"
+    cached = _read(path, None)
+    if cached and not regenerate:
+        return cached
+    facts = _pack_facts(slug, profile)
+    r = llm.claude_call(content_gen.pack_prompt(facts), system=content_gen.PACK_SYSTEM, max_tokens=8000)
+    if r.refused:
+        raise ValueError("Claude declined to write this text. Try Regenerate later, or write it by hand.")
+    try:
+        data = llm.json_from(r.text)
+        landing = data.get("landing") or {}
+    except (ValueError, AttributeError):
+        raise ValueError("Claude's reply wasn't in the expected format. Click Regenerate to try again.")
+    flags = {}
+
+    def guard(key, text):
+        t, f = content_gen.guard_facts(str(text or ""), facts)
+        flags.setdefault(key, []).extend(f)
+        return t
+
+    held = {m["name"].lower() for m in content_gen.menu_items(profile)}
+    pack = {"facts_hash": content_gen.facts_hash(facts), "at": time.strftime("%Y-%m-%d %H:%M"), "model": r.model,
+            "cost_usd": round(r.cost_usd, 4),  # tracked, never shown on screen
+            "about": guard("pack_about", data.get("about")),
+            "menu_descriptions": [{"name": m["name"], "description": guard("pack_menu_copy", m.get("description"))}
+                                  for m in data.get("menu_descriptions") or [] if str(m.get("name", "")).lower() in held],
+            "landing": {"intro": guard("pack_landing", landing.get("intro")),
+                        "meta_description": guard("pack_landing", landing.get("meta_description"))[:160],
+                        "facts": [guard("pack_landing", x) for x in landing.get("facts") or []],
+                        "qa": [{"q": guard("pack_landing", x.get("q")), "a": guard("pack_landing", x.get("a"))}
+                               for x in landing.get("qa") or [] if isinstance(x, dict)]},
+            "flags": flags}
+    _write(path, pack)
+    return pack
+
+
+def content_pack_view(slug: str, profile: dict, site_audit: dict | None, reviews: dict | None, faq_text: str) -> dict:
+    """Six draft cards. The three schemas are built by code every time; the wording comes from the cache."""
+    is_example = slug == EXAMPLE_SLUG
+    cached = None if is_example else _read(state_dir(slug) / "content_pack.json", None)
+    facts = _pack_facts(slug, profile, site_audit, reviews)
+    faq_ld, left_out = content_gen.faq_jsonld(faq_text)
+    menu_ld = content_gen.menu_jsonld(profile)
+    dumps = lambda d: json.dumps(d, indent=2, ensure_ascii=False)
+    need_text = "Click “Write the text” above - Claude writes this from your facts only."
+    pieces = [
+        {"key": "pack_restaurant_schema", "kind": "json", "text": dumps(content_gen.restaurant_jsonld(profile)),
+         "note": "Built from your saved facts - no AI. Fill in or delete any [OWNER TO CONFIRM] line before approving."},
+        {"key": "pack_faq_schema", "kind": "json", "text": dumps(faq_ld) if faq_ld else "",
+         "note": ("Only FAQ answers we actually know are included." +
+                  (f" Left out until you confirm them: {'; '.join(left_out)}" if left_out else "")) if faq_ld
+                 else "No FAQ answers are known yet - fill in the FAQ draft above first."},
+        {"key": "pack_menu_schema", "kind": "json", "text": dumps(menu_ld) if menu_ld else "",
+         "note": "From the dishes and prices you saved." if menu_ld else
+                 "No dishes with prices saved yet - add them in Setup (Owner details). Nothing is made up."},
+        {"key": "pack_about", "kind": "text", "text": (cached or {}).get("about", ""),
+         "note": "" if cached else need_text},
+        {"key": "pack_menu_copy", "kind": "text",
+         "text": "\n\n".join(f"{m['name']} - {m['description']}" for m in (cached or {}).get("menu_descriptions", [])),
+         "note": ("No dishes saved yet, so there's nothing to describe - add them in Setup. Nothing is made up."
+                  if not content_gen.menu_items(profile) else ("" if cached else need_text))},
+        {"key": "pack_landing", "kind": "code",
+         "text": content_gen.landing_html(profile, cached["landing"], faq_ld) if cached else "",
+         "note": "" if cached else need_text},
+    ]
+    for pc in pieces:
+        pc["title"] = PACK_TITLES[pc["key"]]
+        pc["flags"] = (cached or {}).get("flags", {}).get(pc["key"], [])
+    return {"pieces": pieces, "is_sample": is_example,
+            "generated": {"at": cached["at"], "model": cached["model"]} if cached else None,
+            "facts_changed": bool(cached) and cached.get("facts_hash") != content_gen.facts_hash(facts),
+            "can_generate": not is_example and llm.has_key()}
+
+
+def website_pack(slug: str) -> bytes:
+    profile = get_profile(slug)
+    return content_gen.website_pack_zip(profile["name"], _read(state_dir(slug) / "approved.json", {}))
 
 
 def results(slug: str) -> dict | None:
@@ -387,7 +489,7 @@ def results(slug: str) -> dict | None:
     facts = {"dietary_tags": t_site.get("dietary_tags_found"), "hero_dish": menu.get("hero_dish_name"),
              "hero_price": menu.get("hero_dish_price"), "anchor_item": profile.get("anchor_item"),
              "anchor_price": menu.get("anchor_price"), "weak_aspects": weak,
-             "address": profile.get("address"), "hours": profile.get("hours")}
+             "address": profile.get("address"), "hours": profile.get("hours"), "highlights": profile.get("highlights")}
     items = ([{"name": menu["hero_dish_name"], "price": menu["hero_dish_price"]}]
              if menu.get("hero_dish_name") and menu.get("hero_dish_price") else [])
     pool = load_demo_creators() if is_example else load_live_creators()
@@ -395,9 +497,10 @@ def results(slug: str) -> dict | None:
     for c in match_creators(pool, lost_categories, local=local_places(profile)):
         brief = content_briefs(c, profile, lost_categories)[0]
         creators.append({**c, "brief": brief, "outreach": outreach_draft(c, profile, brief)})
+    faq_text = faq_page(target, profile["area"], facts)
     out["make"] = {
         "drafts": [
-            {"key": "faq_page", "title": "FAQ page", "kind": "text", "text": faq_page(target, profile["area"], facts)},
+            {"key": "faq_page", "title": "FAQ page", "kind": "text", "text": faq_text},
             {"key": "schema_markup", "title": "Website schema (paste into the site's <head>)", "kind": "code",
              "text": schema_markup(target, profile.get("website", ""), items, cuisine=profile.get("cuisine"))},
             {"key": "outreach_email", "title": "Pitch to local food writers", "kind": "text",
@@ -407,6 +510,7 @@ def results(slug: str) -> dict | None:
         "creators_note": ("SAMPLE creator profiles." if is_example else
                           ("Verified creators from data/live/creators_live.json." if pool else
                            "No verified creators added yet (Phase 5).")),
+        "pack": content_pack_view(slug, profile, t_site, (reviews or {}).get("restaurants", {}).get(target), faq_text),
     }
 
     # ---- 5. Did my visibility improve?

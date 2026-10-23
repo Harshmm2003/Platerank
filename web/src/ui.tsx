@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -114,4 +114,16 @@ export function download(name: string, text: string) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/** A bar that eases towards 90% while a slow call (Claude web search) runs. */
+export function SlowBar({ label }: { label: string }) {
+  const [p, setP] = useState(5);
+  useEffect(() => { const t = window.setInterval(() => setP((x) => x + (90 - x) * 0.08), 400); return () => window.clearInterval(t); }, []);
+  return (
+    <div className="mt-3">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200"><div className="h-2 rounded-full bg-sky-500 transition-all duration-300" style={{ width: `${p}%` }} /></div>
+      <div className="mt-1 text-xs text-stone-500">{label}</div>
+    </div>
+  );
 }

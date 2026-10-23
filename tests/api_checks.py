@@ -286,6 +286,88 @@ check("pipeline: new categories reach lost categories + creator briefs", "events
 br = {c_: creators_mod.content_briefs({"handle": "@x", "niches": [c_]}, taverna, [c_])[0]["concept_title"] for c_ in ("happy-hour", "drinks", "events")}
 check("creators: briefs for the new categories", "Happy Hour" in br["happy-hour"] and "Cocktail" in br["drinks"] and "Party" in br["events"], br)
 
+# ---- website content pack (fake Claude - no paid calls)
+from platerank import content_gen as cg
+import zipfile, io
+HOURS = "Sun–Thu 11am–9pm, Fri–Sat 11am–9:30pm; happy hour daily 3–6pm"
+oh = cg.parse_hours(HOURS)
+check("pack: hours parsed into schema, happy hour not counted as opening hours",
+      oh == [{"@type": "OpeningHoursSpecification", "dayOfWeek": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"], "opens": "11:00", "closes": "21:00"},
+             {"@type": "OpeningHoursSpecification", "dayOfWeek": ["Friday", "Saturday"], "opens": "11:00", "closes": "21:30"}], oh)
+check("pack: unclear hours -> not guessed", cg.parse_hours("daily 11-10") is None and cg.parse_hours("call us") is None)
+c.put("/api/restaurants", json={"profile": {"name": "Test Taverna", "cuisine": "Greek", "area": "Harbor Point", "hours": HOURS, "lat": 32.8, "lon": -117.24, "city_id": "Springfield|CA",
+                                            "year_opened": 1990, "website": "https://taverna.example"}, "previous_slug": "test_taverna"})
+tprof = pipeline.get_profile("test_taverna")
+rj = cg.restaurant_jsonld(tprof)
+check("pack: restaurant schema from facts only", rj["address"]["streetAddress"] == "12 Ocean Ave" and rj["address"]["postalCode"] == "90000"
+      and rj["geo"]["latitude"] == 32.8 and rj["openingHoursSpecification"] == oh and rj["foundingDate"] == "1990"
+      and rj["servesCuisine"] == ["Greek", "Mediterranean"], rj)
+check("pack: unknown phone + price range -> [OWNER TO CONFIRM]", rj["telephone"].startswith(cg.CONFIRM) and rj["priceRange"].startswith(cg.CONFIRM), rj)
+check("pack: no dishes saved -> no menu schema", cg.menu_jsonld(tprof) is None)
+
+claude_calls = []
+FAKE_PACK = {"about": "Test Taverna has served Greek food at 12 Ocean Ave since 1990. Award-winning chef! Call (619) 555-0101. "
+                      "Also visit Harbor Kitchen at 900 Grand Ave. We open at 10am; happy hour runs 3pm to 6pm.",
+             "menu_descriptions": [{"name": "Moussaka", "description": "Layers of eggplant, $18."}],
+             "landing": {"intro": "A Greek spot in Harbor Point, HP locals call it home.", "meta_description": "Greek food near Ocean Ave",
+                         "facts": ["Open Sun–Thu 11am–9pm", "Est. 1985"],
+                         "qa": [{"q": "Is there a happy hour?", "a": "Yes - daily 3–6pm."}, {"q": "Phone?", "a": "Call 555-123-4567."}]}}
+def fake_pack_call(prompt, **kw):
+    claude_calls.append(kw)
+    return llm.ClaudeResult(text=json.dumps(FAKE_PACK), model="fake-opus")
+llm.claude_call = fake_pack_call
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+g = c.post("/api/restaurants/test_taverna/content-pack", json={})
+pk = json.loads((tmp / "live" / "test_taverna" / "content_pack.json").read_text(encoding="utf-8"))
+check("pack: generated through llm.py once, cached", g.status_code == 200 and len(claude_calls) == 1 and pk["about"], g.json())
+check("pack: fact sheet passed in, honesty rules in the system prompt", "NEVER" in claude_calls[0]["system"].upper() and "OWNER TO CONFIRM" in claude_calls[0]["system"])
+for tok in ("(619) 555-0101", "900 Grand Ave", "10am", "Harbor Kitchen", "Award-winning"):
+    check(f"pack: invented '{tok}' wrapped for the owner", f"{cg.CONFIRM}: {tok}]" in pk["about"], pk["about"])
+for tok in ("12 Ocean Ave", "1990", "3pm", "6pm"):
+    check(f"pack: real fact '{tok}' kept as-is", tok in pk["about"] and f"{cg.CONFIRM}: {tok}" not in pk["about"], pk["about"])
+check("pack: landing facts checked too", f"{cg.CONFIRM}: 1985]" in pk["landing"]["facts"][1] and f"{cg.CONFIRM}: 555-123-4567]" in pk["landing"]["qa"][1]["a"], pk["landing"])
+check("pack: menu copy only for dishes we hold (none -> nothing)", pk["menu_descriptions"] == [], pk["menu_descriptions"])
+# the key check: after the guard, no name / address / hours fact is left that the input facts don't contain
+facts_in = pipeline._pack_facts("test_taverna", tprof)
+all_out = " ".join([pk["about"], pk["landing"]["intro"], *pk["landing"]["facts"], *[x["a"] for x in pk["landing"]["qa"]]])
+_, leftover = cg.guard_facts(all_out, facts_in)
+check("pack: no name/address/hours fact in the output that isn't in the input facts", not leftover, leftover)
+c.post("/api/restaurants/test_taverna/content-pack", json={})
+check("pack: reload reuses the saved text (no new Claude call)", len(claude_calls) == 1, len(claude_calls))
+c.post("/api/restaurants/test_taverna/content-pack", json={"regenerate": True})
+check("pack: Regenerate asks Claude again", len(claude_calls) == 2, len(claude_calls))
+tp = c.get("/api/restaurants/test_taverna/results").json()["make"]["pack"]
+check("pack: six draft cards", [p_["key"] for p_ in tp["pieces"]] == list(cg.PACK_FILES), [p_["key"] for p_ in tp["pieces"]])
+pieces = {p_["key"]: p_ for p_ in tp["pieces"]}
+check("pack: landing page has facts, Q&A and JSON-LD", "<h1>Greek &amp; Mediterranean food in Harbor Point - Test Taverna</h1>" in pieces["pack_landing"]["text"]
+      and "application/ld+json" in pieces["pack_landing"]["text"], pieces["pack_landing"]["text"][:300])
+check("pack: flags shown on the card", "Harbor Kitchen" in pieces["pack_about"]["flags"], pieces["pack_about"]["flags"])
+check("pack: menu cards say there are no dishes instead of making them up", "Nothing is made up" in pieces["pack_menu_schema"]["note"]
+      and "Nothing is made up" in pieces["pack_menu_copy"]["note"] and not pieces["pack_menu_schema"]["text"])
+check("pack: FAQ schema only has answers we know", cg.CONFIRM not in pieces["pack_faq_schema"]["text"] and "happy hour" in pieces["pack_faq_schema"]["text"].lower(),
+      pieces["pack_faq_schema"]["note"])
+check("pack: not regenerated on reload, no 'facts changed' yet", tp["generated"]["model"] == "fake-opus" and tp["facts_changed"] is False, tp["generated"])
+z0 = c.get("/api/restaurants/test_taverna/website-pack.zip")
+check("pack: download before any approval -> plain message", z0.status_code == 400 and "Approve" in z0.json()["detail"], z0.text[:200])
+bad = c.post("/api/restaurants/test_taverna/approve", json={"key": "pack_restaurant_schema", "text": pieces["pack_restaurant_schema"]["text"]})
+check("pack: can't approve while [OWNER TO CONFIRM] remains", bad.status_code == 400 and "OWNER TO CONFIRM" in bad.json()["detail"], bad.json())
+fixed = json.loads(pieces["pack_restaurant_schema"]["text"]); fixed.pop("telephone"); fixed.pop("priceRange")
+c.post("/api/restaurants/test_taverna/approve", json={"key": "pack_restaurant_schema", "text": json.dumps(fixed, indent=2)})
+c.post("/api/restaurants/test_taverna/approve", json={"key": "pack_faq_schema", "text": pieces["pack_faq_schema"]["text"]})
+zr = c.get("/api/restaurants/test_taverna/website-pack.zip")
+names = zipfile.ZipFile(io.BytesIO(zr.content)).namelist() if zr.status_code == 200 else []
+check("pack: zip holds only the approved pieces + head snippet + README", zr.status_code == 200 and zr.headers["content-type"] == "application/zip"
+      and sorted(names) == ["README.txt", "head-snippet.html", "schema-faq.json", "schema-restaurant.json"], names)
+head = zipfile.ZipFile(io.BytesIO(zr.content)).read("head-snippet.html").decode() if names else ""
+check("pack: head snippet wraps each schema in a JSON-LD script tag", head.count('<script type="application/ld+json">') == 2, head[:200])
+c.put("/api/restaurants", json={"profile": {"name": "Test Taverna", "cuisine": "Greek", "area": "Harbor Point", "phone": "(555) 010-2030"}, "previous_slug": "test_taverna"})
+check("pack: editing facts -> 'facts changed, regenerate'", c.get("/api/restaurants/test_taverna/results").json()["make"]["pack"]["facts_changed"] is True)
+check("pack: sample can't generate (no real facts)", c.post("/api/restaurants/example/content-pack", json={}).status_code == 400)
+check("pack: sample shows schemas only", c.get("/api/restaurants/example/results").json()["make"]["pack"]["is_sample"] is True)
+del os.environ["ANTHROPIC_API_KEY"]
+llm.claude_call = real_call
+llm._client = NoRealCalls()
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")
