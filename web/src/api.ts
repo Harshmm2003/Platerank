@@ -48,6 +48,9 @@ export type Profile = {
   landmarks?: string[];
   aliases?: string[];
   signature_terms?: string[];
+  highlights?: string[];
+  cuisine_alternates?: string[];
+  area_nicknames?: string[];
   anchor_item?: string;
   menu?: { hero_dish_name?: string; hero_dish_price?: number | null; anchor_price?: number | null; source?: string };
   competitors?: Competitor[];

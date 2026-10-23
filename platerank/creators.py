@@ -99,6 +99,15 @@ def content_briefs(creator: dict, profile: dict, lost_categories: list[str]) -> 
         "dietary": {"title": f"Vegetarian & Gluten-Free {cuisine.title()} {near}: What Actually Works",
                     "hook": "Say the dietary need out loud, then show the dish.",
                     "format": "YouTube video + Short cut"},
+        "happy-hour": {"title": f"Best Happy Hours in {hood} for Food, Not Just Drinks",
+                       "hook": "Small plates + the happy-hour price list on screen in frame one; say the hours out loud.",
+                       "format": "YouTube Short + Instagram Reel version"},
+        "drinks": {"title": f"Best Cocktail Spots in {hood} Where the Food Holds Up Too",
+                   "hook": "Pour shot of the signature drink, name it on screen, then the dish it pairs with.",
+                   "format": "YouTube Short + Instagram Reel version"},
+        "events": {"title": f"Where to Host a Party or Rehearsal Dinner {near}: Private Rooms Compared",
+                   "hook": "Wide shot of the set-up room, group size + booking basics on screen.",
+                   "format": "YouTube video + blog post version"},
     }
     t = templates.get(cat, {"title": f"Hidden {cuisine.title()} Gems in {hood} — {restaurant}",
                             "hook": "Lead with the signature dish.", "format": "YouTube video + Reel version"})

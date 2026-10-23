@@ -214,6 +214,49 @@ check("web lookup: city required", c.post("/api/web-lookup", json={"name": "X Y"
 llm.claude_call = real_call
 check("llm: state becomes the search region", llm.location_for({"city": "Austin", "state": "TX"})["region"] == "Texas")
 
+# ---- question bank: highlights, cuisine alternates, area nicknames
+import hashlib
+from platerank.queries import generate_queries
+base = {"name": "Test Bistro", "cuisine": "thai", "area": "Union Square", "neighbourhood": "Flatiron", "city": "New York",
+        "landmarks": ["Madison Square Park"], "signature_terms": ["pad see ew"], "price_level": 2}
+BASE_BANK_SHA = "6835b4f10ab3a506"  # the 30 questions before highlights existed - changing them breaks every saved answer
+bq = generate_queries(base)
+check("questions: no new fields -> the same 30 as before (saved answers still reused)",
+      len(bq) == 30 and hashlib.sha256("\n".join(q.text for q in bq).encode()).hexdigest()[:16] == BASE_BANK_SHA, len(bq))
+taverna = {"name": "Test Taverna", "cuisine": "Greek", "area": "Harbor Point", "neighbourhood": "Harbor Point", "city": "Springfield",
+           "address": "12 Ocean Ave, Springfield, CA 90000", "cuisine_alternates": ["Mediterranean"], "area_nicknames": ["HP"],
+           "highlights": ["happy hour", "craft cocktails", "private events", "rehearsal dinner", "catering", "gluten-free",
+                          "vegan", "outdoor seating"]}
+tq = generate_queries(taverna)
+texts = [q.text for q in tq]
+check("questions: total stays 30-36", 30 <= len(tq) <= 36, len(tq))
+check("questions: no duplicates", len({t.lower() for t in texts}) == len(texts))
+check("questions: new categories added", {"happy-hour", "drinks", "events"} <= {q.category for q in tq}, sorted({q.category for q in tq}))
+check("questions: street from the address", "happy hour with good food near Ocean Ave" in texts, texts[30:])
+check("questions: rehearsal dinner + catering", "where to host a rehearsal dinner in Harbor Point" in texts and "Greek catering in Springfield" in texts, texts[30:])
+check("questions: cocktails + nickname", "date night spot in HP with good cocktails" in texts, texts[30:])
+check("questions: alternate cuisine rotated in", sum("Mediterranean" in t for t in texts) >= 4, texts)
+check("questions: area nickname rotated in", sum(" in HP" in t for t in texts) >= 4, texts)
+check("questions: no restaurant name in any question", not any("Test Taverna" in t for t in texts))
+check("questions: cap keeps one per highlight first (gluten-free kept)", "Mediterranean restaurant with gluten-free options in Springfield" in texts, texts[30:])
+oq = [q.text for q in generate_queries({**base, "highlights": ["rooftop views", "barbecue platter"]})]
+check("questions: unknown highlight -> one plain question", "thai restaurant with rooftop views in Flatiron" in oq, oq[30:])
+check("questions: 'barbecue' is not a bar", not any("good drinks" in t for t in oq), oq[30:])
+check("questions: no address -> area used instead of a street",
+      "happy hour with good food near Union Square, New York" in [q.text for q in generate_queries({**base, "highlights": ["happy hour"]})])
+
+# new categories flow through Discovery -> Analysis -> gaps -> creators without errors (fake AI answers)
+discovery.ASK["fakehl"] = lambda q, **kw: (("Try Test Taverna or Other Taverna" if "happy hour" in q else "Try Other Taverna"), "fake", [], 0.0)
+c.put("/api/restaurants", json={"profile": {**taverna, "competitors": [{"name": "Other Taverna"}]}})
+pipeline.run("test_taverna", platforms=["fakehl"])
+tr = c.get("/api/restaurants/test_taverna/results").json()
+rates = {r["category"]: r["mention_rate"] for r in tr["rank"]["by_category"]}
+check("pipeline: new categories scored", rates.get("happy-hour") == 1.0 and rates.get("events") == 0.0, rates)
+check("pipeline: new categories reach lost categories + creator briefs", "events" in tr["change"]["lost_categories"]
+      and all(k in tr for k in ("why", "change", "make")), tr["change"]["lost_categories"])
+br = {c_: creators_mod.content_briefs({"handle": "@x", "niches": [c_]}, taverna, [c_])[0]["concept_title"] for c_ in ("happy-hour", "drinks", "events")}
+check("creators: briefs for the new categories", "Happy Hour" in br["happy-hour"] and "Cocktail" in br["drinks"] and "Party" in br["events"], br)
+
 # ---- frontend build present
 dist = Path("web/dist/index.html")
 check("frontend: built (web/dist/index.html)", dist.exists(), "run: cd web && npm run build")

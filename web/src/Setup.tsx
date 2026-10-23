@@ -341,6 +341,9 @@ function StepRestaurant({ slug, initial, status }: { slug: string | null; initia
             <Field label="Signature dishes" hint="comma-separated — used in the AI questions"><input className={inputCls} value={(p.signature_terms || []).join(", ")} onChange={(e) => set("signature_terms", list(e.target.value))} /></Field>
             <Field label="Other names AI might use" hint="e.g. a short name"><input className={inputCls} value={(p.aliases || []).join(", ")} onChange={(e) => set("aliases", list(e.target.value))} /></Field>
             <Field label="Landmarks people search by" hint="e.g. a station or venue"><input className={inputCls} value={(p.landmarks || []).join(", ")} onChange={(e) => set("landmarks", list(e.target.value))} /></Field>
+            <Field label="What you're known for" hint="comma-separated, e.g. happy hour, cocktails, private events, catering, gluten-free — adds matching AI questions"><input className={inputCls} value={(p.highlights || []).join(", ")} onChange={(e) => set("highlights", list(e.target.value))} /></Field>
+            <Field label="Other words for your cuisine" hint="e.g. a broader style people also search for"><input className={inputCls} value={(p.cuisine_alternates || []).join(", ")} onChange={(e) => set("cuisine_alternates", list(e.target.value))} /></Field>
+            <Field label="Nicknames for your area" hint="e.g. the short name locals use"><input className={inputCls} value={(p.area_nicknames || []).join(", ")} onChange={(e) => set("area_nicknames", list(e.target.value))} /></Field>
           </div>
         </Card>
         <ErrorNote error={error} />
