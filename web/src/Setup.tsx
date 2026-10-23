@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, City, Competitor, miles, Nearby, PlaceDetails, PlaceHit, Profile, Source, Status } from "./api";
+import { api, City, Competitor, miles, Nearby, NearbyResult, PlaceDetails, PlaceHit, Profile, Source, Status } from "./api";
 import { Badge, Button, Card, ErrorNote, Field, inputCls, More, SourceLinks, cx } from "./ui";
 import { go } from "./App";
 
@@ -77,8 +77,8 @@ function CityPicker({ value, onPick }: { value: City | null; onPick: (c: City) =
   );
 }
 
-function RestaurantSearch({ city, onPick, onSearching, onWeb, canWeb }: { city: City | null; onPick: (h: PlaceHit) => void;
-  onSearching: (b: boolean) => void; onWeb: (name: string) => void; canWeb: boolean }) {
+function RestaurantSearch({ city, onPick, onSearching, onWeb, canWeb, webBusy }: { city: City | null; onPick: (h: PlaceHit) => void;
+  onSearching: (b: boolean) => void; onWeb: (name: string) => void; canWeb: boolean; webBusy?: boolean }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<PlaceHit[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -113,11 +113,11 @@ function RestaurantSearch({ city, onPick, onSearching, onWeb, canWeb }: { city: 
               </button>
             </li>
           ))}
-          {canWeb && (
+          {canWeb && !webBusy && (
             <li className="border-t border-stone-100">
               <button className="w-full cursor-pointer px-3 py-2 text-left text-sm text-sky-700 hover:bg-sky-50"
                 onMouseDown={(e) => { e.preventDefault(); picked.current = q; setOpen(false); onWeb(q); }}>
-                Not in this list? Find “{q}” on the web instead (≈5¢)
+                Not in this list? Find “{q}” on the web instead
               </button>
             </li>
           )}
@@ -126,7 +126,7 @@ function RestaurantSearch({ city, onPick, onSearching, onWeb, canWeb }: { city: 
       {hits && hits.length === 0 && q !== picked.current && (
         <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
           <span>“{q}” isn't on the free map (OpenStreetMap) in {city?.name}.</span>
-          {canWeb ? <Button small onClick={() => { picked.current = q; onWeb(q); }}>Find it on the web (≈5¢)</Button>
+          {canWeb ? <Button small busy={webBusy} onClick={() => { picked.current = q; onWeb(q); }}>Find it on the web</Button>
             : <span>Fill in the fields below by hand.</span>}
         </div>
       )}
@@ -301,7 +301,7 @@ function StepRestaurant({ slug, initial, status }: { slug: string | null; initia
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="City" required><CityPicker value={city} onPick={pickCity} /></Field>
             <div className="sm:col-span-2">
-              <Field label="Restaurant"><RestaurantSearch city={city} onPick={pick} onWeb={webLookup} canWeb={!!status?.claude_key}
+              <Field label="Restaurant"><RestaurantSearch city={city} onPick={pick} onWeb={webLookup} canWeb={!!status?.claude_key} webBusy={stage === "web"}
                 onSearching={(b) => { if (b) { setStage("searching"); setStageNote(`Looking for matches in ${city?.name}…`); } else setStage((s) => (s === "searching" ? "idle" : s)); }} /></Field>
             </div>
           </div>
@@ -357,9 +357,9 @@ function StepRestaurant({ slug, initial, status }: { slug: string | null; initia
       <div className="space-y-4">
         <Card>
           <h3 className="font-semibold">Look up public facts</h3>
-          <p className="mt-1 text-sm text-stone-500">Claude searches the web for the Google price level, rating and review count — with a link for each, for you to check. About 5 cents.</p>
+          <p className="mt-1 text-sm text-stone-500">Claude searches the web for the Google price level, rating and review count — with a link for each, for you to check.</p>
           <div className="mt-3">
-            <Button kind="secondary" onClick={lookup} busy={busy === "facts"} disabled={!p.name.trim() || !status?.claude_key}
+            <Button kind="secondary" onClick={lookup} busy={busy === "facts"} disabled={!p.name.trim() || !status?.claude_key || stage === "web"}
               title={status?.claude_key ? "" : "Needs a Claude key in .env"}>Search the web</Button>
           </div>
           {busy === "facts" && <SlowBar label={`Claude is searching the web for ${p.name}… (10–30 seconds)`} />}
@@ -399,7 +399,13 @@ type Suggestion = { name: string; website?: string; address?: string; why?: stri
 function StepCompetitors({ slug, initial, status }: { slug: string; initial: Profile; status: Status | null }) {
   const [p, setP] = useState<Profile>(initial);
   const [radius, setRadius] = useState(800);
-  const [nearby, setNearby] = useState<Nearby[] | null>(null);
+  const [map, setMap] = useState<NearbyResult | null>(null);
+  const [mapBusy, setMapBusy] = useState(false);
+  const [claudeBusy, setClaudeBusy] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const latest = useRef(0);
+  const freshNext = useRef(false);  // "Refresh" skips the saved results once
+  const retryMap = () => { freshNext.current = true; setRefresh((n) => n + 1); };
   const [sugg, setSugg] = useState<{ suggestions: Suggestion[]; sources: Source[]; engine?: string; grounded: boolean } | null>(null);
   const [manual, setManual] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -408,20 +414,28 @@ function StepCompetitors({ slug, initial, status }: { slug: string; initial: Pro
   const has = (n: string) => comps.some((c) => c.name.toLowerCase() === n.toLowerCase());
   const toggle = (c: Competitor) => setP((x) => ({ ...x, competitors: has(c.name) ? comps.filter((k) => k.name.toLowerCase() !== c.name.toLowerCase()) : [...comps, c] }));
 
+  // Map search only once the slider stops moving; answers to older slider positions are ignored.
+  // A slow/busy map comes back as saved results or map_unavailable (calm note), never as an error.
   useEffect(() => {
     if (p.lat == null || p.lon == null) return;
-    setBusy("nearby"); setError(null);
+    const id = ++latest.current;
     const t = window.setTimeout(() => {
-      api.get<{ results: Nearby[] }>(`/api/places/nearby?lat=${p.lat}&lon=${p.lon}&radius=${radius}&cuisine=${encodeURIComponent(p.cuisine)}&exclude=${encodeURIComponent(p.name)}`)
-        .then((d) => setNearby(d.results)).catch((e) => setError(e.message)).finally(() => setBusy(null));
-    }, 400);
+      const fresh = freshNext.current;
+      freshNext.current = false;
+      setMapBusy(true);
+      api.get<NearbyResult>(`/api/places/nearby?lat=${p.lat}&lon=${p.lon}&radius=${radius}&cuisine=${encodeURIComponent(p.cuisine)}` +
+        `&exclude=${encodeURIComponent(p.name)}&slug=${encodeURIComponent(slug)}${fresh ? "&fresh=true" : ""}`)
+        .then((d) => { if (id === latest.current) setMap(d); })
+        .catch((e) => { if (id === latest.current) setError(e.message); })
+        .finally(() => { if (id === latest.current) setMapBusy(false); });
+    }, 600);
     return () => window.clearTimeout(t);
-  }, [radius, p.lat, p.lon, p.cuisine, p.name]);
+  }, [radius, p.lat, p.lon, p.cuisine, p.name, slug, refresh]);
 
   async function askClaude() {
-    setBusy("claude"); setError(null);
+    setClaudeBusy(true); setError(null);
     try { setSugg(await api.post(`/api/restaurants/${slug}/suggest-competitors`)); } catch (e) { setError((e as Error).message); }
-    setBusy(null);
+    setClaudeBusy(false);
   }
 
   async function save() {
@@ -431,6 +445,7 @@ function StepCompetitors({ slug, initial, status }: { slug: string; initial: Pro
     setBusy(null);
   }
 
+  const nearby = map && !map.map_unavailable ? map.results : null;
   const same = nearby?.filter((n) => n.same_cuisine) || [];
   const other = nearby?.filter((n) => !n.same_cuisine) || [];
   const Row = ({ n }: { n: Nearby }) => (
@@ -457,13 +472,24 @@ function StepCompetitors({ slug, initial, status }: { slug: string; initial: Pro
                 <span className="text-sm font-medium whitespace-nowrap">Within {miles(radius)}</span>
                 <input type="range" min={200} max={3200} step={100} value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-brand-600" />
               </div>
-              {busy === "nearby" && <p className="mt-2 text-sm text-stone-500">Looking around…</p>}
+              {mapBusy && <SlowBar label="Looking for nearby restaurants…" />}
+              {!mapBusy && map?.map_unavailable && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-stone-100 p-3 text-sm text-stone-600">
+                  <span>The free map is slow right now - use Claude's suggestions below{status?.claude_key ? "" : ", or add names on the right"}.</span>
+                  {status?.claude_key && <Button small kind="secondary" onClick={askClaude} busy={claudeBusy}>Suggest competitors</Button>}
+                  <button className="cursor-pointer text-xs text-stone-500 underline" onClick={retryMap}>Try the map again</button>
+                </div>
+              )}
               {nearby && (
                 <div className="mt-3">
                   <div className="text-sm font-semibold text-stone-700">Same kind of food ({same.length})</div>
                   {same.length ? same.map((n) => <Row key={n.name} n={n} />) : <p className="py-2 text-sm text-stone-500">None tagged as {p.cuisine} on the map in this radius — widen it, or ask Claude.</p>}
                   {other.length > 0 && <More label={`Other restaurants nearby (${other.length})`}>{other.map((n) => <Row key={n.name} n={n} />)}</More>}
-                  <p className="mt-2 text-xs text-stone-400">From OpenStreetMap — it can miss places or list closed ones.</p>
+                  <p className="mt-2 text-xs text-stone-400">
+                    {map?.cached_at ? <>Saved map results from {map.cached_at}{map.cached_radius && map.cached_radius !== radius ? ` (searched within ${miles(map.cached_radius)})` : ""} · </> : null}
+                    From OpenStreetMap — it can miss places or list closed ones.
+                    {map?.cached_at && <> <button className="cursor-pointer underline" disabled={mapBusy} onClick={retryMap}>Refresh from the map</button></>}
+                  </p>
                 </div>
               )}
             </div>
@@ -474,10 +500,11 @@ function StepCompetitors({ slug, initial, status }: { slug: string; initial: Pro
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="font-semibold">Ask Claude who else competes</h3>
-              <p className="text-sm text-stone-500">Searches the web, with sources. About 5–10 cents.</p>
+              <p className="text-sm text-stone-500">Searches the web, with sources.</p>
             </div>
-            <Button kind="secondary" onClick={askClaude} busy={busy === "claude"} disabled={!status?.claude_key}>Suggest competitors</Button>
+            <Button kind="secondary" onClick={askClaude} busy={claudeBusy} disabled={!status?.claude_key}>Suggest competitors</Button>
           </div>
+          {claudeBusy && <SlowBar label="Claude is searching the web for competitors… (10–30 seconds)" />}
           {sugg && (
             <div className="mt-3">
               {!sugg.grounded && <p className="mb-2 rounded bg-amber-50 p-2 text-sm text-amber-900">Not web-verified — check each one.</p>}

@@ -134,8 +134,9 @@ def places_details(osm_type: str, osm_id: int):
 
 
 @app.get("/api/places/nearby")
-def places_nearby(lat: float, lon: float, radius: int = 800, cuisine: str = "", exclude: str = ""):
-    return {"results": places.nearby_restaurants(lat, lon, radius, cuisine, exclude)}
+def places_nearby(lat: float, lon: float, radius: int = 800, cuisine: str = "", exclude: str = "",
+                  slug: str | None = None, fresh: bool = False):
+    return pipeline.nearby(slug, lat, lon, radius, cuisine, exclude, fresh)
 
 
 class LookupIn(BaseModel):

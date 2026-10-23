@@ -107,6 +107,35 @@ def estimate_calls(slug: str, runs: int, platforms: list[str]) -> dict:
             "rough_max_cost_usd": round(n * runs * len(live) * per_call, 2)}
 
 
+# ------------------------------------------------------------------ nearby competitors (map + saved results)
+def nearby(slug: str | None, lat: float, lon: float, radius: int, cuisine: str = "", exclude: str = "",
+           fresh: bool = False) -> dict:
+    """Radius search for competitors. Each successful map answer is saved per restaurant
+    (state_dir/nearby_cache.json) and reused, so a slow or busy free map never blocks setup.
+    Returns {"results", "cached_at"} - or, when the map fails and nothing is saved,
+    {"results": [], "map_unavailable": True} (a calm note on screen, not an error)."""
+    from . import places
+    path = state_dir(slug) / "nearby_cache.json" if slug and get_profile(slug) else None
+    cache = _read(path, {}) if path else {}
+    key = f"{round(lat, 5)},{round(lon, 5)}|{int(radius)}|{cuisine.strip().lower()}"
+    if key in cache and not fresh:
+        return {"results": cache[key]["results"], "cached_at": cache[key]["at"]}
+    try:
+        res = places.nearby_restaurants(lat, lon, radius, cuisine, exclude)
+    except places.PlacesError:
+        # fall back to the saved search with the closest radius for this spot + cuisine
+        same_spot = [(abs(int(k.split("|")[1]) - radius), v) for k, v in cache.items()
+                     if k.split("|")[0] == key.split("|")[0] and k.split("|")[2] == key.split("|")[2]]
+        if same_spot:
+            v = min(same_spot, key=lambda x: x[0])[1]
+            return {"results": v["results"], "cached_at": v["at"], "cached_radius": v["radius"]}
+        return {"results": [], "map_unavailable": True}
+    if path:
+        cache[key] = {"at": time.strftime("%Y-%m-%d %H:%M"), "radius": int(radius), "results": res}
+        _write(path, cache)
+    return {"results": res, "cached_at": None}
+
+
 # ------------------------------------------------------------------ Discovery
 def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | None = None,
         web_search: bool = True, progress=None, should_stop=None) -> dict:

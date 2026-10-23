@@ -21,6 +21,7 @@ UA = {"User-Agent": "PlateRank-Hackathon/1.0 (NYU SPS x Pulse Foundry prototype)
 PHOTON = "https://photon.komoot.io/api/"
 OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
 OVERPASS_TIMEOUT = 15  # seconds per server; the public servers are sometimes slow - fail fast and say so
+NEARBY_TIMEOUT = 8     # competitor radius search: give up sooner - the screen falls back to saved results / Claude
 FOOD_TAGS = ("restaurant", "fast_food", "cafe", "food_court", "bar", "pub")
 
 # Customer words -> OSM cuisine tag values that count as the same kind of place.
@@ -135,11 +136,11 @@ def search_restaurants(query: str, lat: float | None = None, lon: float | None =
     return out[:limit]
 
 
-def _overpass(query: str) -> list[dict]:
+def _overpass(query: str, timeout: int = OVERPASS_TIMEOUT) -> list[dict]:
     last = None
     for url in OVERPASS:
         try:
-            r = requests.post(url, data={"data": query}, headers=UA, timeout=OVERPASS_TIMEOUT)
+            r = requests.post(url, data={"data": query}, headers=UA, timeout=timeout)
             r.raise_for_status()
             return r.json().get("elements", [])
         except Exception as e:
@@ -170,7 +171,7 @@ def nearby_restaurants(lat: float, lon: float, radius_m: int = 800, cuisine: str
          "out tags center 200;")
     words = cuisine_words(cuisine)
     out, seen = [], set()
-    for e in _overpass(q):
+    for e in _overpass(q, timeout=NEARBY_TIMEOUT):
         t = e.get("tags", {})
         name = t.get("name", "").strip()
         if not name or name.lower() in seen or (exclude_name and name.lower() == exclude_name.lower()):

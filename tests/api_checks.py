@@ -214,6 +214,35 @@ check("web lookup: city required", c.post("/api/web-lookup", json={"name": "X Y"
 llm.claude_call = real_call
 check("llm: state becomes the search region", llm.location_for({"city": "Austin", "state": "TX"})["region"] == "Texas")
 
+# ---- competitor radius search: slow / failed free map never shows an error (fake map)
+import requests as _rq
+map_calls = []
+def slow_map(*a, **k):
+    map_calls.append(k.get("timeout")); raise _rq.exceptions.ReadTimeout("fake slow map")
+def good_map(*a, **k):
+    map_calls.append(k.get("timeout"))
+    return Resp({"elements": [{"type": "node", "id": 9, "lat": 32.8001, "lon": -117.2389, "tags": {"name": "Diner Near", "cuisine": "diner"}}]})
+nb = lambda radius=800, extra="": c.get(f"/api/places/nearby?lat=32.8&lon=-117.239&radius={radius}&cuisine=diner&exclude=Check%20Diner&slug=check_diner{extra}")
+ncache = tmp / "live" / "check_diner" / "nearby_cache.json"
+places.requests.post = slow_map
+r0 = nb()
+check("nearby: slow map + nothing saved -> calm 'map unavailable', not an error", r0.status_code == 200 and r0.json() == {"results": [], "map_unavailable": True}, r0.json())
+check("nearby: slow map gives up quickly (short timeout per server)", map_calls and max(map_calls) <= 10, map_calls)
+places.requests.post = good_map
+r1 = nb().json()
+check("nearby: map answer returned + saved for this restaurant", r1["results"][0]["name"] == "Diner Near" and r1["cached_at"] is None and ncache.exists(), r1)
+map_calls.clear()
+r2 = nb().json()
+check("nearby: same search reuses saved results (no map call), labelled with time", not map_calls and r2["cached_at"] and r2["results"] == r1["results"], (map_calls, r2))
+nb(extra="&fresh=true")
+check("nearby: 'Refresh' asks the map again", len(map_calls) == 1, map_calls)
+places.requests.post = slow_map
+r3 = nb(radius=1600).json()
+check("nearby: slow map -> closest saved radius shown instead", r3["results"] == r1["results"] and r3["cached_radius"] == 800 and r3["cached_at"], r3)
+r4 = c.get("/api/places/nearby?lat=1&lon=1&radius=800").json()
+check("nearby: no restaurant (no cache) + slow map -> still calm", r4 == {"results": [], "map_unavailable": True}, r4)
+check("nearby: cache never written into the real data folder", not (real_data / "live" / "check_diner").exists())
+
 # ---- question bank: highlights, cuisine alternates, area nicknames
 import hashlib
 from platerank.queries import generate_queries
@@ -256,6 +285,12 @@ check("pipeline: new categories reach lost categories + creator briefs", "events
       and all(k in tr for k in ("why", "change", "make")), tr["change"]["lost_categories"])
 br = {c_: creators_mod.content_briefs({"handle": "@x", "niches": [c_]}, taverna, [c_])[0]["concept_title"] for c_ in ("happy-hour", "drinks", "events")}
 check("creators: briefs for the new categories", "Happy Hour" in br["happy-hour"] and "Cocktail" in br["drinks"] and "Party" in br["events"], br)
+
+# ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
+import re as _re
+money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")
+         for m in _re.finditer(r"¢|\bcents?\b|cost \$|\$\{[^}]*(cost|usd)[^}]*\}|at most \(", f.read_text(encoding="utf-8"))]
+check("frontend: no cost / price-of-a-call shown in the UI", not money, money)
 
 # ---- frontend build present
 dist = Path("web/dist/index.html")

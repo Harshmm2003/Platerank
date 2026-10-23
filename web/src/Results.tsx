@@ -33,7 +33,7 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
             {c.CACHED > 0 && <Badge kind="CACHED">{c.CACHED} saved</Badge>}
             {c.DEMO > 0 && <Badge kind="DEMO">{c.DEMO} sample answers</Badge>}
             {c.FAILED > 0 && <Badge kind="FAILED" title="Left out of every number">{c.FAILED} no answer</Badge>}
-            <span>· checked {r.meta.when} · {r.meta.platforms.join(" + ")}{r.meta.web_search ? " with web search" : ""}{r.meta.cost_usd ? ` · cost $${r.meta.cost_usd.toFixed(2)}` : ""}</span>
+            <span>· checked {r.meta.when} · {r.meta.platforms.join(" + ")}{r.meta.web_search ? " with web search" : ""}</span>
           </div>
         </div>
         <div className="flex gap-2">
@@ -214,7 +214,7 @@ function Why({ r, reload }: { r: R; reload: () => void }) {
           </div>
           {!r.is_sample && <Button kind="secondary" busy={busy === "auto"} onClick={async () => { setBusy("auto"); setError(null);
             try { setAuto((await api.post<{ results: typeof auto }>(`/api/restaurants/${r.slug}/listings/auto`)).results); } catch (e) { setError((e as Error).message); } setBusy(null); }}>
-            Find public ratings (≈5¢ each)</Button>}
+            Find public ratings</Button>}
         </div>
         {Object.keys(w.listings).length > 0 && (
           <table className="mt-3 w-full text-sm">

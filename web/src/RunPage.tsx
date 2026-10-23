@@ -30,7 +30,6 @@ export default function RunPage({ slug, status }: { slug: string; status: Status
   const claudeOn = !!status?.claude_key && useClaude;
   const savedPlatforms = Object.entries(est?.cached || {}).filter(([p]) => p !== "claude");
   const platforms = [...(claudeOn ? ["claude"] : []), ...savedPlatforms.filter(([p]) => useSaved[p]).map(([p]) => p)];
-  const cost = claudeOn && est ? (est.rough_max_cost_usd * (webSearch ? 1 : 0.6)) : 0;
 
   async function start() {
     setError(null);
@@ -114,8 +113,8 @@ export default function RunPage({ slug, status }: { slug: string; status: Status
             </div>
             <div className="rounded-lg bg-stone-50 p-3 text-sm text-stone-700">
               Up to <b>{(est?.questions ?? 30) * runs * (claudeOn ? 1 : 0)}</b> new Claude questions
-              {claudeOn && <> · roughly <b>${cost.toFixed(2)}</b> at most (less when saved answers are reused)</>}.
-              {!claudeOn && platforms.length > 0 && <> Showing saved answers only — no cost.</>}
+              {claudeOn && <> (fewer when saved answers are reused)</>}.
+              {!claudeOn && platforms.length > 0 && <> Showing saved answers only.</>}
             </div>
           </div>
         )}

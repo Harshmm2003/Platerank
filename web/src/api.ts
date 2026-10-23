@@ -65,6 +65,7 @@ export type City = { id: string; name: string; state: string; state_name: string
 export type PlaceHit = { name: string; osm_type: string; osm_id: number; kind: string; address: string; city: string; neighbourhood: string; lat: number; lon: number };
 export type PlaceDetails = { name: string; cuisine: string; website: string; hours: string; phone: string; address: string; lat: number; lon: number; source: string };
 export type Nearby = { name: string; cuisine: string; same_cuisine: boolean; website: string; address: string; distance_m: number | null; source: string };
+export type NearbyResult = { results: Nearby[]; cached_at?: string | null; cached_radius?: number; map_unavailable?: boolean };
 export type Source = { url: string; title: string };
 
 export type Job = { id: string; state: "running" | "done" | "failed"; done: number; total: number; note: string; error: string | null; meta: RunMeta | null };
