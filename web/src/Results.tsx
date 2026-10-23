@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, pct, PackPiece, Results as R } from "./api";
-import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
+import { api, ApiError, Evidence, pct, PackPiece, Results as R } from "./api";
+import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
 const TABS = [
@@ -50,6 +50,7 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
         tab === "change" ? <Change r={r} reload={load} /> :
         tab === "make" ? <Make r={r} reload={load} /> :
         tab === "improve" ? <Improve r={r} /> : <Rank r={r} />}
+      <SourcesPanel slug={slug} />
     </div>
   );
 }
@@ -89,6 +90,7 @@ function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () =>
           <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button></div>
         </Card>
       )}
+      <SourcesPanel slug={r.slug} />
     </div>
   );
 }
@@ -154,7 +156,8 @@ function Why({ r, reload }: { r: R; reload: () => void }) {
   const w = r.why;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [auto, setAuto] = useState<{ restaurant: string; rating?: number; review_count?: number; price_level?: number; sources?: Record<string, string>; error?: string }[] | null>(null);
+  const [auto, setAuto] = useState<{ restaurant: string; rating?: number; review_count?: number; price_level?: number; sources?: Record<string, string>; error?: string;
+    evidence?: Record<string, Evidence>; unverified?: Record<string, unknown>; rejected?: number }[] | null>(null);
 
   async function act(name: string, fn: () => Promise<unknown>) {
     setBusy(name); setError(null);
@@ -266,7 +269,9 @@ function Why({ r, reload }: { r: R; reload: () => void }) {
                 {a.error ? <span className="text-red-700">{a.error}</span> : (
                   <span className="flex items-center gap-3">
                     <span>{a.rating ?? "?"}★ · {a.review_count ?? "?"} reviews · {a.price_level ? "$".repeat(a.price_level) : "?"}</span>
-                    {Object.values(a.sources || {})[0] && <a className="text-sky-700" href={Object.values(a.sources || {})[0]} target="_blank" rel="noreferrer">source ↗</a>}
+                    <EvidenceBadge ev={a.evidence?.google_rating || a.evidence?.google_review_count || a.evidence?.price_level} />
+                    {Object.keys(a.unverified || {}).length > 0 && <span className="text-xs text-stone-400" title="Not used - couldn't be checked on the cited page">{Object.keys(a.unverified || {}).length} unchecked</span>}
+                    {!!a.rejected && <span className="text-xs text-stone-400">{a.rejected} rejected</span>}
                     <Button small busy={busy === "save" + a.restaurant} disabled={!a.rating && !a.review_count && !a.price_level}
                       onClick={() => act("save" + a.restaurant, () => api.post(`/api/restaurants/${r.slug}/listings`, { restaurant: a.restaurant, rating: a.rating ?? null,
                         review_count: a.review_count ?? null, price_level: a.price_level ?? null, source: `Claude web search: ${Object.values(a.sources || {}).join(" ")}`.slice(0, 500) }))}>Save</Button>
@@ -587,6 +592,32 @@ function CompareCard({ r }: { r: R }) {
             <tr key={c.category} className="border-t border-stone-100">
               <td className="py-1">{c.category}</td><td>{pct(c.first)}</td><td>→</td><td className="font-semibold">{pct(c.latest)}</td>
               <td className="text-stone-500">{c.first != null && c.latest != null ? pts(c.latest - c.first) : "—"}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </More>
+    </Card>
+  );
+}
+
+/** Everything taken from the web for this restaurant, with how it was checked (the evidence ledger). */
+function SourcesPanel({ slug }: { slug: string }) {
+  const [d, setD] = useState<{ records: Evidence[]; counts: Record<string, number> } | null>(null);
+  useEffect(() => { api.get<typeof d>(`/api/restaurants/${slug}/evidence`).then(setD).catch(() => setD(null)); }, [slug]);
+  if (!d || !d.records.length) return null;
+  const c = d.counts;
+  return (
+    <Card>
+      <More label={`Sources — ${c.verified} verified · ${c.unverified} unverified · ${c.rejected} rejected`}>
+        <p className="mb-2 text-xs text-stone-500">Every fact taken from the web, checked by fetching the cited page ourselves.
+          Only ✓ verified ones are used in scores and drafts. Rejected = the page loaded but didn't say it - never shown as a fact.</p>
+        <table className="w-full text-sm">
+          <tbody>{d.records.map((e) => (
+            <tr key={e.id} className={cx("border-t border-stone-100 align-top", e.status === "rejected" && "text-stone-400")}>
+              <td className="py-1 pr-2 text-xs text-stone-500">{e.subject}</td>
+              <td className="py-1 pr-2">{e.status === "rejected" ? <s>{e.text}</s> : e.text}</td>
+              <td className="py-1 pr-2">{e.status === "rejected" ? <span className="text-xs">✕ rejected</span> : <EvidenceBadge ev={e} />}</td>
+              <td className="py-1 text-xs text-stone-400">{e.check_note}</td>
             </tr>
           ))}</tbody>
         </table>

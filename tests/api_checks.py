@@ -13,7 +13,30 @@ def check(name, cond, detail=""):
     global ok, fail
     print(("PASS " if cond else "FAIL ") + name + (f": {detail}" if detail and not cond else "")); ok += bool(cond); fail += not cond
 
-from platerank import llm, places, pipeline, store, discovery
+from platerank import llm, places, pipeline, store, discovery, evidence
+
+# ---- every cited page is a FAKE: the checks never fetch the real web
+import requests as _requests_mod
+class FakePage:
+    def __init__(self, text, status=200, ctype="text/html"): self.text, self.status_code, self.headers = text, status, {"content-type": ctype}
+FILLER = " Lorem ipsum menu reservations directions parking gift cards catering private dining. " * 8
+FAKE_PAGES = {
+    "https://cafeathena.com": FakePage("<html><head><title>Caf&eacute; Athena - Pacific Beach</title><script>var x='4.9';</script></head><body>"
+        "<h1>Café Athena</h1><p>Greek &amp; Mediterranean in Pacific Beach since 1990.</p><p>1846 Garnet Avenue, San Diego, CA 92109</p>"
+        "<p>Sun–Thu 11:00 AM – 9:00 PM · Fri–Sat 11:00 AM – 9:30 PM</p><p>Rated 4.5 by 1,234 diners. $$</p>"
+        "<p>“Cafe Athena’s lamb gyro is the best thing on Garnet” - a regular</p>" + FILLER + "</body></html>"),
+    "https://slow.example": "timeout",
+    "https://blocked.example": FakePage("Forbidden", status=403),
+    "https://jsapp.example": FakePage("<html><body><div id=root></div><script>render()</script></body></html>"),
+    "https://other.example/list": FakePage("<html><body><h2>Best Greek in PB</h2><p>Olive Tree Taverna and Athens Market are favourites.</p>" + FILLER + "</body></html>"),
+}
+def fake_fetch(url, timeout=None, headers=None):
+    assert timeout == 8 and "PlateRank" in headers["User-Agent"], (timeout, headers)
+    page = FAKE_PAGES.get(url)
+    if page == "timeout": raise _requests_mod.exceptions.ReadTimeout("fake slow page")
+    if page is None: raise _requests_mod.exceptions.ConnectionError("fake: no such page")
+    return page
+evidence.FETCH = fake_fetch
 
 # ---- work on a COPY of data/ so checks never touch real saved data
 real_data = store.DATA
@@ -203,7 +226,8 @@ places.requests.get = lambda *a, **k: Resp({"features": [{"properties": {"name":
                                                            "geometry": {"coordinates": [-117.2388, 32.8002]}}]})
 real_call = llm.claude_call
 llm.claude_call = lambda *a, **k: llm.ClaudeResult(text='{"name": "Café Athena", "address": "1846 Garnet Ave, San Diego, CA 92109", '
-    '"neighbourhood": "Pacific Beach", "cuisine": "Greek", "found": true, "sources": {"address": "https://cafeathena.com"}}', model="fake")
+    '"neighbourhood": "Pacific Beach", "cuisine": "Greek", "found": true, "sources": {"name": "https://cafeathena.com", '
+    '"address": "https://cafeathena.com", "neighbourhood": "https://cafeathena.com", "cuisine": "https://cafeathena.com"}}', model="fake")
 wl = c.post("/api/web-lookup", json={"name": "Cafe Athena", "city": "San Diego|CA"}).json()
 check("web lookup: basics + sources + map point", wl["name"] == "Café Athena" and wl["sources"]["address"] and
       abs(wl["_point"]["lat"] - 32.8002) < 1e-3 and wl["_point"]["precision"].startswith("street"), wl)
@@ -428,6 +452,54 @@ ml = c.get("/api/restaurants/check_diner/results").json()["mailto"].get("outreac
 check("email: approved -> mailto with subject + body, no recipient",
       ml == "mailto:?subject=A%20diner%20your%20readers%20may%20miss&body=Hi%20-%20I%20run%20Check%20Diner.%0D%0AThanks%21", ml)
 check("email: no subject line -> default subject", cg.mailto_link("Hi there", "Collaboration with X").startswith("mailto:?subject=Collaboration%20with%20X&body=Hi%20there"))
+
+# ---- evidence ledger: every web claim re-checked on its cited page (fake pages)
+V = lambda kind, text, url="https://cafeathena.com": evidence.verify({"kind": kind, "text": text, "source_url": url, "found_by": "Claude web search"})
+check("evidence: address found (Ave vs Avenue)", V("address", "1846 Garnet Ave, San Diego, CA 92109")["status"] == "verified")
+check("evidence: rating + review count match loosely (4.5, 1,234)", V("rating", 4.5)["status"] == "verified" and V("review_count", 1234)["status"] == "verified")
+check("evidence: hours match in another format (11am vs 11:00 AM)", V("hours", "Sun–Thu 11am–9pm, Fri–Sat 11am–9:30pm")["status"] == "verified")
+check("evidence: curly quotes + accents + case normalised", V("quote", '"CAFÉ ATHENA\'S lamb gyro is the best thing on Garnet"')["status"] == "verified")
+check("evidence: '...' gaps allowed, in order", V("quote", "Café Athena's lamb gyro ... on Garnet")["status"] == "verified"
+      and V("quote", "on Garnet ... lamb gyro")["status"] == "rejected")
+check("evidence: numbers inside scripts don't count (4.9 only in JS)", V("rating", 4.9)["status"] == "rejected")
+r_missing = V("quote", "Voted best Greek restaurant in San Diego")
+check("evidence: loaded but quote missing -> rejected", r_missing["status"] == "rejected" and "not found" in r_missing["check_note"], r_missing)
+r_slow = V("rating", 4.5, "https://slow.example")
+check("evidence: page timeout -> unverified, says why", r_slow["status"] == "unverified" and "ReadTimeout" in r_slow["check_note"], r_slow)
+check("evidence: blocked (403) -> unverified", V("rating", 4.5, "https://blocked.example")["status"] == "unverified")
+check("evidence: page needs a browser -> unverified, not rejected", V("rating", 4.5, "https://jsapp.example")["status"] == "unverified")
+check("evidence: no link -> unverified", V("rating", 4.5, "")["status"] == "unverified")
+check("evidence: competitor short name accepted ('Olive Tree Taverna: Greek Kitchen')", V("name", "Olive Tree Taverna: Greek Kitchen", "https://other.example/list")["status"] == "verified")
+
+# check_facts: verified kept, unverified moved aside (never used), rejected dropped + counted; all in the ledger
+ff = {"google_rating": 4.5, "google_review_count": 999, "price_level": 2, "hours": "daily 3am-4am",
+      "sources": {"google_rating": "https://cafeathena.com", "google_review_count": "https://cafeathena.com",
+                  "price_level": "https://slow.example", "hours": "https://cafeathena.com"}}
+evidence.check_facts("ev_test", "Café Athena", ff, places.FACT_KEYS)
+check("evidence: only verified values stay filled in", ff["google_rating"] == 4.5 and ff["google_review_count"] is None and ff["price_level"] is None, ff)
+check("evidence: unverified kept aside for 'check the link', rejected counted",
+      ff["_unverified"] == {"price_level": 2} and ff["_rejected"] == 2 and ff["_evidence"]["google_rating"]["status"] == "verified", ff)
+led = evidence.summary("ev_test")
+check("evidence: every claim recorded in the ledger (rejected too)", led["counts"] == {"verified": 1, "unverified": 1, "rejected": 2}
+      and (tmp / "live" / "ev_test" / "evidence.json").exists() and not (real_data / "live" / "ev_test").exists(), led["counts"])
+evidence.check_facts("ev_test", "Café Athena", dict(ff, google_rating=4.5, sources=ff["sources"]), {"google_rating": "rating"})
+check("evidence: same claim re-checked, not duplicated", evidence.summary("ev_test")["counts"]["verified"] == 1)
+
+# Suggest competitors: the cited page must mention the name
+discovery_real_claude = discovery._suggest_competitors_claude
+discovery._suggest_competitors_claude = lambda prof, n: {"suggestions": [
+    {"name": "Olive Tree Taverna", "source_url": "https://other.example/list"},
+    {"name": "Made Up Grill", "source_url": "https://other.example/list"},
+    {"name": "Athens Market", "source_url": "https://slow.example"}], "sources": [], "grounded": True}
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+sg = c.post("/api/restaurants/check_diner/suggest-competitors").json()
+by_name = {x["name"]: x["evidence"]["status"] for x in sg["suggestions"]}
+check("evidence: competitor not on its cited page -> dropped + counted", by_name == {"Olive Tree Taverna": "verified", "Athens Market": "unverified"}
+      and sg["rejected"] == 1, sg)
+del os.environ["ANTHROPIC_API_KEY"]
+discovery._suggest_competitors_claude = discovery_real_claude
+ev_api = c.get("/api/restaurants/check_diner/evidence").json()
+check("evidence: Sources panel route lists the ledger", ev_api["counts"]["rejected"] == 1 and any(e["text"] == "Made Up Grill" for e in ev_api["records"]), ev_api["counts"])
 
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re

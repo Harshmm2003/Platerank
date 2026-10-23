@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from platerank import llm, places, pipeline
+from platerank import evidence, llm, places, pipeline
 from platerank.store import list_profiles, save_profile, slugify, load_profile
 from platerank.queries import generate_queries
 from platerank.discovery import suggest_competitors
@@ -161,8 +161,14 @@ class FactsIn(BaseModel):
 
 @app.post("/api/web-facts")
 def web_facts(body: FactsIn):
-    """Claude + web search: price level, rating, review count... each with its source. Costs ~$0.03-0.08."""
+    """Claude + web search: price level, rating, review count... each checked against its cited page."""
     return places.web_facts(body.profile)
+
+
+@app.get("/api/restaurants/{slug}/evidence")
+def evidence_ledger(slug: str):
+    _profile_or_404(slug)
+    return evidence.summary(slug)
 
 
 @app.post("/api/restaurants/{slug}/suggest-competitors")
@@ -195,10 +201,12 @@ def auto_listings(slug: str):
         prof = {"name": c["name"], "address": c.get("address") or p.get("address"), "area": p.get("area"),
                 "city": p.get("city")}
         try:
-            f = places.web_facts(prof)
+            f = places.web_facts(prof, slug=slug)  # only verified values come back filled in
             out.append({"restaurant": c["name"], "rating": f.get("google_rating"),
                         "review_count": f.get("google_review_count"), "price_level": f.get("price_level"),
-                        "sources": f.get("sources") or {}, "cost_usd": f.get("_cost_usd", 0)})
+                        "sources": f.get("sources") or {}, "evidence": f.get("_evidence") or {},
+                        "unverified": f.get("_unverified") or {}, "rejected": f.get("_rejected", 0),
+                        "cost_usd": f.get("_cost_usd", 0)})
         except Exception as e:
             out.append({"restaurant": c["name"], "error": str(e)})
     return {"results": out}

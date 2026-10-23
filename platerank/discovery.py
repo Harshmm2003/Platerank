@@ -126,9 +126,22 @@ def suggest_competitors(profile: dict, n: int = 6) -> dict:
     """SETUP helper: real same-cuisine competitors near the target, as PROPOSALS for the owner.
     Uses Claude + web search when an Anthropic key exists (web-verified, with sources);
     otherwise falls back to the Gemini version below."""
-    if llm.has_key():
-        return _suggest_competitors_claude(profile, n)
-    return _suggest_competitors_gemini(profile, n)
+    out = _suggest_competitors_claude(profile, n) if llm.has_key() else _suggest_competitors_gemini(profile, n)
+    return _check_evidence(profile, out)
+
+def _check_evidence(profile: dict, out: dict) -> dict:
+    """The cited page must mention the competitor's name. Rejected ones are dropped (and counted);
+    unverified ones come back marked so the screen greys them out."""
+    from . import evidence, store
+    recs = evidence.record_and_verify(store.slugify(profile["name"]), [
+        {"kind": "name", "text": s["name"], "source_url": s.get("source_url") or "", "subject": "competitor"}
+        for s in out["suggestions"]])
+    kept = []
+    for s, rec in zip(out["suggestions"], recs):
+        if rec["status"] != evidence.REJECTED:
+            kept.append({**s, "evidence": evidence.badge(rec)})
+    out.update(suggestions=kept, rejected=len(recs) - len(kept))
+    return out
 
 def _competitor_prompt(profile: dict, n: int) -> str:
     where = ", ".join(x for x in (profile.get("address"), profile.get("neighbourhood"), profile.get("area"),

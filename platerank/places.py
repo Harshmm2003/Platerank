@@ -230,12 +230,21 @@ def web_lookup(name: str, city: dict) -> dict:
     if not isinstance(facts, dict) or not facts.get("found"):
         raise PlacesError(f"Claude couldn't confirm a restaurant called '{name}' in {city['name']}. "
                           "Check the spelling, or type the details in by hand.")
-    point = geocode(facts.get("address") or "", city)
+    # every value is checked against the page Claude cited; only verified ones are kept as facts
+    from . import evidence, store
+    evidence.check_facts(store.slugify(facts.get("name") or name), name, facts, LOOKUP_KEYS)
+    point = geocode(facts.get("address") or "", city) if facts.get("address") else None
     facts.update(_engine=f"Claude ({r.model}) + web search", _cost_usd=r.cost_usd, _point=point)
     return facts
 
 
-def web_facts(profile: dict) -> dict:
+LOOKUP_KEYS = {"name": "name", "address": "address", "neighbourhood": "quote", "cuisine": "quote", "website": "website",
+               "hours": "hours", "phone": "phone", "price_level": "price_level", "google_rating": "rating",
+               "google_review_count": "review_count"}
+FACT_KEYS = {k: LOOKUP_KEYS[k] for k in ("price_level", "google_rating", "google_review_count", "website", "hours", "cuisine")}
+
+
+def web_facts(profile: dict, slug: str | None = None) -> dict:
     """Public facts OSM lacks, looked up by Claude with web search: Google price level, Google rating
     and review count, website and hours if missing. Every value comes back with a source URL or as
     null - the owner confirms before anything is saved."""
@@ -252,6 +261,8 @@ def web_facts(profile: dict) -> dict:
     facts = llm.json_from(r.text or "{}")
     if not isinstance(facts, dict):
         facts = {}
+    from . import evidence, store
+    evidence.check_facts(slug or store.slugify(profile["name"]), profile["name"], facts, FACT_KEYS)
     facts["_engine"] = f"Claude ({r.model}) + web search"
     facts["_cost_usd"] = r.cost_usd
     return facts

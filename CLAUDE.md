@@ -37,6 +37,7 @@ Setup -> Discovery -> Analysis -> 3 Action tracks (Fix Pack / Creators / Value-f
 | `content_gen.py` | Action A | FAQ page, schema.org markup, outreach email — facts only, unknowns become `[OWNER TO CONFIRM: ...]` |
 | `store.py` | Setup + Measurement | Restaurant profiles in `data/live/<slug>/`, SQLite `data/runs.db` (runs + every answer row) |
 | `llm.py` | all | The ONE place Claude is called: models, web search / web fetch tools, cost per call, plain-English errors |
+| `evidence.py` | all | Evidence ledger: every web-sourced fact/quote is re-fetched from its cited page and marked verified / unverified / rejected |
 | `places.py` | Setup | OpenStreetMap restaurant search (dropdown), place details, radius search for competitors; Claude web facts (price level, rating) with sources |
 | `pipeline.py` | all | The pipeline as functions for the web app: run Discovery, build the results bundle per owner question, approvals, reviews/listings saving |
 | `api.py` | UI backend | FastAPI routes over `pipeline`/`places`; plain-English errors; serves `web/dist` |
@@ -66,6 +67,9 @@ suggest competitors and draft text.
 9. Ask the user before: installs, paid API usage, deleting data, git commits/pushes
    (exception on Oct 23, 2026: commits/pushes to `frontend-v2` after a green `python check.py` - see "Run it").
 10. Speak plainly to the user (they are new to Claude Code); short summaries.
+11. No web-sourced claim reaches the owner unless it is in the evidence ledger (`platerank/evidence.py`,
+    `data/live/<slug>/evidence.json`); only verified claims feed scores and drafts. New web features call
+    `evidence.record_and_verify()` / `check_facts()` - unverified = greyed "check the link", rejected = counted, never shown as fact.
 
 ## Gotchas
 - Gemini FREE tier = 20 requests/day PER MODEL (`gemini-3.6-flash`, `gemini-3.5-flash`, ...). A full Discovery

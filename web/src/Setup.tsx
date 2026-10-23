@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api, City, Competitor, miles, Nearby, NearbyResult, PlaceDetails, PlaceHit, Profile, Source, Status } from "./api";
-import { Badge, Button, Card, ErrorNote, Field, inputCls, More, SlowBar, SourceLinks, cx } from "./ui";
+import { api, City, Competitor, Evidence, miles, Nearby, NearbyResult, PlaceDetails, PlaceHit, Profile, Source, Status } from "./api";
+import { Badge, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, SlowBar, SourceLinks, cx } from "./ui";
 import { go } from "./App";
 
 const PRICE = ["unknown", "$", "$$", "$$$", "$$$$"];
@@ -162,7 +162,8 @@ function LookupProgress({ stage, detail }: { stage: "idle" | "searching" | "deta
 }
 
 type WebFacts = { price_level?: number | null; google_rating?: number | null; google_review_count?: number | null; website?: string | null;
-  hours?: string | null; cuisine?: string | null; sources?: Record<string, string>; _engine?: string; _cost_usd?: number };
+  hours?: string | null; cuisine?: string | null; sources?: Record<string, string>; _engine?: string; _cost_usd?: number;
+  _evidence?: Record<string, Evidence>; _unverified?: Record<string, unknown>; _rejected?: number };
 
 function StepRestaurant({ slug, initial, status }: { slug: string | null; initial: Profile; status: Status | null }) {
   const [p, setP] = useState<Profile>(initial);
@@ -236,7 +237,10 @@ function StepRestaurant({ slug, initial, status }: { slug: string | null; initia
       setFound((x) => ({ ...x, ...fs }));
       setFacts(f);  // rating + review count are saved with the profile, like "Search the web"
       setStage("done");
-      setStageNote(`Found on the web: ${Object.keys(fs).length} details, each with its source link (see “Look up public facts”).` +
+      const nUnver = Object.keys(f._unverified || {}).length, nRej = f._rejected || 0;
+      setStageNote(`Found on the web and checked on the cited pages: ${Object.keys(fs).length} details used.` +
+        (nUnver ? ` ${nUnver} couldn't be checked (left blank - see the links in “Look up public facts”).` : "") +
+        (nRej ? ` ${nRej} rejected - not found on the cited page.` : "") +
         (f._point ? ` Placed on the map by its ${f._point.precision} for the nearby-competitor search.` : " Couldn't place the address on the map, so nearby competitors will come from Claude instead."));
     } catch (e) {
       setError((e as Error).message); setStage("idle");
@@ -360,10 +364,16 @@ function StepRestaurant({ slug, initial, status }: { slug: string | null; initia
                 .map(([k, v, key]) => (
                   <div key={k} className="flex justify-between gap-2 border-b border-stone-100 pb-1">
                     <span className="text-stone-500">{k}</span>
-                    <span className="text-right">{v ?? <span className="text-stone-400">not found</span>}
-                      {facts.sources?.[key] && <a className="ml-1 text-sky-700" href={facts.sources[key]} target="_blank" rel="noreferrer">↗</a>}</span>
+                    <span className="flex flex-col items-end text-right">
+                      {v != null ? v : facts._unverified?.[key] != null
+                        ? <span className="text-stone-400 line-through decoration-stone-300" title="Not used - we couldn't check it on the cited page">{String(facts._unverified[key])}</span>
+                        : <span className="text-stone-400">not found</span>}
+                      <EvidenceBadge ev={facts._evidence?.[key]} />
+                    </span>
                   </div>
                 ))}
+              {!!facts._rejected && <p className="text-xs text-stone-500">{facts._rejected} claim{facts._rejected > 1 ? "s" : ""} rejected - not found on the cited page.</p>}
+              <p className="text-xs text-stone-400">Only ✓ verified values are used. Greyed ones couldn't be checked - open the link and type them in yourself if they're right.</p>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs text-stone-400">{facts._engine}</span>
                 <Button small onClick={useFacts}>Use these</Button>
@@ -384,7 +394,7 @@ function StepRestaurant({ slug, initial, status }: { slug: string | null; initia
 }
 
 // ---------------------------------------------------------------- step 2
-type Suggestion = { name: string; website?: string; address?: string; why?: string; source_url?: string; site_responds?: boolean | null };
+type Suggestion = { name: string; website?: string; address?: string; why?: string; source_url?: string; site_responds?: boolean | null; evidence?: Evidence };
 
 function StepCompetitors({ slug, initial, status }: { slug: string; initial: Profile; status: Status | null }) {
   const [p, setP] = useState<Profile>(initial);
@@ -396,7 +406,7 @@ function StepCompetitors({ slug, initial, status }: { slug: string; initial: Pro
   const latest = useRef(0);
   const freshNext = useRef(false);  // "Refresh" skips the saved results once
   const retryMap = () => { freshNext.current = true; setRefresh((n) => n + 1); };
-  const [sugg, setSugg] = useState<{ suggestions: Suggestion[]; sources: Source[]; engine?: string; grounded: boolean } | null>(null);
+  const [sugg, setSugg] = useState<{ suggestions: Suggestion[]; sources: Source[]; engine?: string; grounded: boolean; rejected?: number } | null>(null);
   const [manual, setManual] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -499,15 +509,18 @@ function StepCompetitors({ slug, initial, status }: { slug: string; initial: Pro
             <div className="mt-3">
               {!sugg.grounded && <p className="mb-2 rounded bg-amber-50 p-2 text-sm text-amber-900">Not web-verified — check each one.</p>}
               {sugg.suggestions.map((s) => (
-                <label key={s.name} className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-stone-50">
-                  <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={has(s.name)} onChange={() => toggle({ name: s.name, website: s.website || "", address: s.address, source: s.source_url || "Claude web search" })} />
+                <label key={s.name} className={cx("flex items-start gap-3 rounded-lg px-2 py-2", s.evidence?.status === "verified" ? "cursor-pointer hover:bg-stone-50" : "opacity-60")}>
+                  <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={has(s.name)} disabled={s.evidence?.status !== "verified" && !has(s.name)}
+                    title={s.evidence?.status === "verified" ? "" : "Not checked - open the link; if it's right, add it by name on the right"}
+                    onChange={() => toggle({ name: s.name, website: s.website || "", address: s.address, source: s.source_url || "Claude web search" })} />
                   <div className="min-w-0">
                     <div className="font-medium">{s.name} {s.site_responds === false && <Badge kind="FAILED">site didn't load</Badge>}</div>
                     <div className="text-xs text-stone-500">{[s.address, s.why].filter(Boolean).join(" · ")}</div>
-                    {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer" className="text-xs text-sky-700 hover:underline">source ↗</a>}
+                    <EvidenceBadge ev={s.evidence} />
                   </div>
                 </label>
               ))}
+              {!!sugg.rejected && <p className="mt-1 text-xs text-stone-500">{sugg.rejected} suggestion{sugg.rejected > 1 ? "s" : ""} rejected - the cited page doesn't mention {sugg.rejected > 1 ? "them" : "it"}.</p>}
               <SourceLinks sources={sugg.sources} />
             </div>
           )}

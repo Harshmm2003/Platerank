@@ -127,3 +127,17 @@ export function SlowBar({ label }: { label: string }) {
     </div>
   );
 }
+
+/** ✓ verified <time> / ? unverified - on every web-sourced item, with the link it was checked against. */
+export function EvidenceBadge({ ev }: { ev?: { status: string; retrieved_at?: string; source_url?: string; check_note?: string } | null }) {
+  if (!ev) return null;
+  const ok = ev.status === "verified";
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs">
+      <span title={ev.check_note} className={cx("rounded-full px-1.5 py-0.5 font-semibold", ok ? "bg-green-100 text-green-800" : "bg-stone-200 text-stone-600")}>
+        {ok ? `✓ verified ${(ev.retrieved_at || "").slice(5)}` : "? unverified"}
+      </span>
+      {ev.source_url && <a className="text-sky-700 hover:underline" href={ev.source_url} target="_blank" rel="noreferrer">{ok ? "source ↗" : "check the link ↗"}</a>}
+    </span>
+  );
+}

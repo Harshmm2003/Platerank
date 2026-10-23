@@ -138,3 +138,6 @@ type Snap = { when: string; mention_rate: number; avg_rank: number | null; share
 export type Compare = { comparable: boolean; label: string; reason?: string; checks?: number; compared_checks?: number; skipped?: number;
   platforms?: string[]; first?: Snap; latest?: Snap; change?: { mention_rate: number | null; avg_rank: number | null; share_of_voice: number | null };
   by_category?: { category: string; first: number | null; latest: number | null; questions?: number }[] };
+
+export type Evidence = { id: string; status: "verified" | "unverified" | "rejected"; retrieved_at: string; source_url: string;
+  page_title?: string; check_note?: string; found_by?: string; kind?: string; subject?: string; text?: string };
