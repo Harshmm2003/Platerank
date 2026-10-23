@@ -1,0 +1,135 @@
+{
+ "draft_key": "reddit_owner_sandiego_1",
+ "target": "r/sandiego",
+ "status": "ok",
+ "transcript": [
+  {
+   "agent": "Promoter",
+   "round": 1,
+   "text": "The draft discloses ownership (R1) and every claim matches owner-confirmed facts: address, area, happy hour 3–6pm, hours, and full bar with Greek-mythology cocktails (fact:address, fact:happy_hour, fact:hours, fact:known_for). It has no fake reviews, no incentives, and no superlatives (R3, R4, R5). Two soft issues remain. The tone is slightly promotional for Reddit (R6), and the r/sandiego rules are unverified (R7), so the owner must read them before posting. I've trimmed the draft to a plainer, informational version.",
+   "citations": [
+    "R1",
+    "R2",
+    "R5",
+    "R6",
+    "R7",
+    "fact:address",
+    "fact:happy_hour",
+    "fact:hours",
+    "fact:known_for"
+   ],
+   "note": "Proposed an edited version."
+  },
+  {
+   "agent": "Skeptic",
+   "round": 1,
+   "citations": [
+    "R1",
+    "fact:hours",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+   ],
+   "text": "Fails R6: The post is informational, but it still reads like a promotional listing with the address, hours and happy hour, and it is titled as a promotion. That is a soft concern for r/sandiego.; R7: The r/sandiego rules are unverified, so the owner must read them before posting."
+  },
+  {
+   "agent": "Promoter",
+   "round": 2,
+   "text": "The hard rules all pass (R1–R5). The only failures are soft: R6 (tone) and R7 (unverified subreddit rules). I've toned the post down so it reads as a helpful note rather than a listing. It keeps only facts from the profile. R7 can't be fixed by editing the text. The owner has to read r/sandiego's rules before posting, and I've flagged that.",
+   "citations": [
+    "R1",
+    "R2",
+    "R6",
+    "R7",
+    "fact:happy_hour",
+    "fact:hours",
+    "fact:address",
+    "fact:known_for"
+   ],
+   "note": "Proposed an edited version."
+  },
+  {
+   "agent": "Skeptic",
+   "round": 2,
+   "citations": [
+    "R1",
+    "fact:hours",
+    "R3",
+    "R4",
+    "R5",
+    "R6",
+    "R7"
+   ],
+   "text": "Fails R7: The subreddit's rules are unverified (target_rules_verified is false), so the owner must read r/sandiego's rules before posting."
+  }
+ ],
+ "checklist": [
+  {
+   "rule": "R1",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The draft opens with 'Owner of Café Athena here' and the title repeats it, so the owner is clearly disclosed.",
+   "cite": "R1",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R2",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The happy hour, address, full bar, Greek-mythology cocktails, and hours all match profile facts, and 'PB' is a listed nickname.",
+   "cite": "fact:hours",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R3",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The draft has no customer quotes, testimonials, or invented reviews, and it is written openly as the owner.",
+   "cite": "R3",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R4",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The draft offers no incentive and does not ask for reviews of any kind, including on Yelp.",
+   "cite": "R4",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R5",
+   "level": "hard",
+   "result": "pass",
+   "reason": "The draft makes no superlative or 'best' claims.",
+   "cite": "R5",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R6",
+   "level": "soft",
+   "result": "pass",
+   "reason": "The tone is short and plain, and it answers a happy-hour question without hype, though it is still mildly promotional.",
+   "cite": "R6",
+   "by": "Skeptic"
+  },
+  {
+   "rule": "R7",
+   "level": "soft",
+   "result": "fail",
+   "reason": "We couldn't check this subreddit's rules - read them before posting.",
+   "cite": "R7",
+   "by": "code"
+  }
+ ],
+ "verdict": "Post after edits",
+ "summary": "Verdict: Post after edits. Passed: R1, R2, R3, R4, R5, R6. Failed: R7 (We couldn't check this subreddit's rules - read them before posting.). Suggested edit: yes - see below.",
+ "suggested_edit": "Owner of Café Athena here. For anyone looking for a happy hour in PB: ours runs daily 3–6pm at 1846 Garnet Ave. We have a full bar, including Greek-mythology cocktails. We're open Sun–Thu 11am–9pm and Fri–Sat 11am–9:30pm. Happy to answer any questions here.",
+ "rejected_citations": [],
+ "calls": 4,
+ "cost": 0.0,
+ "prompt_version": "review-v1",
+ "label": "Two AI agents reviewed this. You decide.",
+ "first_cost": 0.053
+}

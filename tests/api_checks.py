@@ -887,8 +887,11 @@ r0 = review("recheck_cafe", key_ruled)
 check("agents: step 0 fact check fails a hard rule -> 'Don't post' with NO Claude call", r0["verdict"] == "Don't post" and agent_calls == []
       and {c_["rule"] for c_ in r0["checklist"] if c_["result"] == "fail"} >= {"R1", "R5"} and "Stopped by the fact check" in r0["summary"], r0["summary"])
 c.post("/api/restaurants/recheck_cafe/approve", json={"key": key_ruled, "text": kinds["post"]["text"]})
+import shutil as _sh
+_sh.rmtree(tmp / "live" / "recheck_cafe" / "agent_reviews", ignore_errors=True)  # make sure the FIRST call really calls the agents
 queue[:] = [A_OK, ALL_PASS]
 first = review("recheck_cafe", key_ruled, fresh=False)
+check("agents: first call (nothing saved) really calls the agents", first["cached"] is False and len(agent_calls) == 2, agent_calls)
 second = review("recheck_cafe", key_ruled, fresh=False)
 strip = lambda x: {k: v for k, v in x.items() if k not in ("cached", "cost")}
 check("agents: same inputs -> the saved review word for word, no call, $0", second["cached"] is True and agent_calls == [] and strip(second) == strip(first)

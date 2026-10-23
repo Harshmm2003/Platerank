@@ -245,9 +245,10 @@ def _finish(path, draft, checklist, transcript, suggested, rejected, cost, calls
     verdict = verdict_of(checklist, status)
     out = {"draft_key": draft.get("key"), "target": draft["target"], "status": status, "transcript": transcript, "checklist": checklist,
            "verdict": verdict, "summary": summary_of(verdict, checklist, suggested, rejected, status, stopped_by_code),
-           "suggested_edit": suggested, "rejected_citations": rejected, "calls": calls, "cost": round(cost, 4),
+           "suggested_edit": suggested, "rejected_citations": rejected, "calls": calls, "first_cost": round(cost, 4),
            "prompt_version": PROMPT_VERSION, "label": "Two AI agents reviewed this. You decide."}
     if status == "ok":  # a FAILED review isn't cached - the next try may work
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({**out, "cost": 0.0, "first_cost": out["cost"]}, indent=1, ensure_ascii=False), encoding="utf-8")
-    return {**out, "cached": False}
+        path.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
+    # exactly what the cache will return later, plus what THIS call cost
+    return {**json.loads(json.dumps(out, ensure_ascii=False)), "cached": False, "cost": round(cost, 4)}
