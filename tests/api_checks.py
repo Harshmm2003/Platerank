@@ -501,6 +501,66 @@ discovery._suggest_competitors_claude = discovery_real_claude
 ev_api = c.get("/api/restaurants/check_diner/evidence").json()
 check("evidence: Sources panel route lists the ledger", ev_api["counts"]["rejected"] == 1 and any(e["text"] == "Made Up Grill" for e in ev_api["records"]), ev_api["counts"])
 
+# ---- search-citation tier: llm.py keeps cited_text; a quote in the citation of the SAME url = verified (search citation)
+cit_msg = NS(model="fake", stop_reason="end_turn", content=[NS(type="text", text="ok", citations=[
+              NS(url="https://blocked.example/", title="Blocked", cited_text="Great gyros and super friendly staff, we go every week.")])],
+             usage=NS(input_tokens=1, output_tokens=1, cache_read_input_tokens=0, cache_creation_input_tokens=0, server_tool_use=None))
+llm._client = NS(messages=NS(create=lambda **kw: cit_msg))
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+cr = llm.claude_call("hi", model="claude-haiku-5-5", effort=None)
+check("citations: cited_text + url kept from web search citations", cr.citations == [{"url": "https://blocked.example/", "title": "Blocked",
+      "cited_text": "Great gyros and super friendly staff, we go every week."}], cr.citations)
+llm._client = NoRealCalls()
+blk = evidence.verify({"kind": "quote", "text": "great gyros and super friendly staff", "source_url": "https://blocked.example"}, citations=cr.citations)
+check("citations: blocked page but quote in its search citation -> verified (search citation)",
+      blk["status"] == "verified" and blk["tier"] == "search citation" and evidence.badge(blk)["tier"] == "search citation", blk)
+check("citations: page fetch tier is labelled too", V("rating", 4.5)["tier"] == "page fetch")
+check("citations: citation of a DIFFERENT page doesn't count", evidence.verify({"kind": "quote", "text": "great gyros", "source_url": "https://slow.example"},
+      citations=cr.citations)["status"] == "unverified")
+
+# ---- what AI says about you (saved answers only, no AI calls)
+said = pipeline.ai_says({"name": "Café Athena", "aliases": []}, [
+    {"status": "LIVE", "mentioned": True, "query": "best greek in pb", "platform": "claude", "sources": [{"url": "https://eater.com/x"}],
+     "answer": "**Café Athena** is known for its great lamb gyros. However, Cafe Athena can be pricey on weekends. Other Place is fine too."},
+    {"status": "FAILED", "mentioned": True, "query": "x", "answer": "Café Athena is wonderful."}])
+check("ai says: sentences naming you, grouped praised / criticised", said["counts"] == {"praised": 1, "criticised": 1, "described": 0}
+      and said["groups"]["praised"][0]["sources"] == ["https://eater.com/x"] and said["groups"]["praised"][0]["question"] == "best greek in pb", said)
+check("ai says: labelled as AI quotes, FAILED rows + other restaurants left out", "AI answers" in said["label"] and len(said["headline"]) == 2
+      and not any("Other Place" in q["quote"] for q in said["headline"]))
+check("ai says: on the results 'why' tab", "ai_says" in c.get("/api/restaurants/recheck_cafe/results").json()["why"])
+
+# ---- what people say right now -> evidence ledger -> business value (verified only)
+FAKE_PAGES["https://slow.example/r"] = "timeout"
+FAKE_REVIEWS = [
+    {"quote": "Cafe Athena’s lamb gyro is the best thing on Garnet", "rating": "5", "date": "Sep 2026", "source_url": "https://cafeathena.com", "site": "Blog"},
+    {"quote": "Great gyros and super friendly staff", "rating": 5, "source_url": "https://blocked.example", "site": "Yelp"},
+    {"quote": "Rude staff and totally overpriced, never again", "rating": 1, "source_url": "https://cafeathena.com", "site": "Reddit"},
+    {"quote": "Slow service and bland food tonight", "rating": 2, "source_url": "https://slow.example/r", "site": "TripAdvisor"},
+    {"quote": "Loved the happy hour", "rating": 5, "source_url": "", "site": "Google"},
+    {"quote": " ".join(["word"] * 45), "source_url": "https://cafeathena.com"}]
+llm.claude_call = lambda *a, **k: llm.ClaudeResult(text=json.dumps(FAKE_REVIEWS), model="fake", citations=cr.citations)
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+ps = c.post("/api/restaurants/check_diner/people-say/search").json()
+st = {x["quote"][:12]: x["evidence"]["status"] for x in ps["saved"]["items"]}
+check("people say: page-verified + citation-verified kept, unverified greyed", st == {"Cafe Athena’": "verified", "Great gyros ": "verified",
+      "Slow service": "unverified"}, st)
+check("people say: rejected counted, no-URL + too-long dropped", ps["saved"]["rejected"] == 1 and ps["saved"]["dropped_no_url"] == 2, ps["saved"])
+check("people say: saved to public_reviews.json", (tmp / "live" / "check_diner" / "public_reviews.json").exists())
+bv = ps["business_value"]
+check("business value: only the 2 verified quotes counted", bv["ready"] and bv["counts"]["verified_quotes"] == 2, bv.get("counts"))
+check("business value: rejected + unverified complaints never feed the scores",
+      bv["aspects"]["service"]["negative"] == 0 and bv["aspects"]["price_value"]["negative"] == 0 and bv["aspects"]["food"]["negative"] == 0, bv["aspects"])
+check("business value: no complaints -> 'Doing well'", bv["aspects"]["service"]["status"] == "Doing well - no complaints found", bv["aspects"]["service"])
+check("business value: one plain sentiment sentence", bv["sentiment"].startswith("Mostly positive") and "2 verified web quotes" in bv["sentiment"], bv["sentiment"])
+check("people say: sample can't search the web", c.post("/api/restaurants/example/people-say/search").status_code == 400)
+c.post("/api/restaurants/check_diner/reviews", json={"restaurant": "Check Diner", "avg_rating": 3, "source": "Google Maps",
+                                                      "text": "2 | The price is too much for small portions."})
+bv2 = c.get("/api/restaurants/check_diner/people-say").json()["business_value"]
+check("business value: owner-pasted reviews added + complaint becomes an action with its quote",
+      bv2["counts"]["owner_reviews"] == 1 and bv2["aspects"]["price_value"]["negative"] >= 1 and bv2["actions"][0]["quote"] and "low evidence" in bv2["actions"][0]["evidence"], bv2)
+llm.claude_call = real_call
+del os.environ["ANTHROPIC_API_KEY"]
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")

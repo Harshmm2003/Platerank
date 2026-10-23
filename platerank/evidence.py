@@ -117,13 +117,30 @@ def _id(kind: str, text: str, url: str) -> str:
     return hashlib.sha256(f"{kind}|{normalise(str(text))}|{url}".encode()).hexdigest()[:12]
 
 
-def verify(record: dict, get=None, pages: dict | None = None) -> dict:
-    """Fetch the cited page (that one URL only, 8 s, polite UA) and check the text is on it."""
+def _same_url(a: str, b: str) -> bool:
+    norm = lambda u: re.sub(r"^https?://(www\.)?", "", (u or "").strip()).rstrip("/").lower()
+    return norm(a) == norm(b)
+
+
+def verify(record: dict, get=None, pages: dict | None = None, citations: list | None = None) -> dict:
+    """Fetch the cited page (that one URL only, 8 s, polite UA) and check the text is on it.
+    If the page can't confirm it (blocked, needs a browser, changed), a web-search citation of that SAME URL whose
+    cited_text contains the quote counts as the second tier: verified (search citation)."""
+    out = _verify_page(record, get, pages)
+    if out["status"] != VERIFIED:
+        for c in citations or []:
+            if _same_url(c.get("url"), record.get("source_url")) and matches(record["kind"], record["text"], normalise(c.get("cited_text", ""))):
+                return {**out, "status": VERIFIED, "tier": "search citation", "page_title": out.get("page_title") or c.get("title", ""),
+                        "check_note": "matched the search engine's citation of this page (" + out["check_note"] + ")"}
+    return out
+
+
+def _verify_page(record: dict, get=None, pages: dict | None = None) -> dict:
     get = get or FETCH or requests.get
     url = record.get("source_url") or ""
     now = time.strftime("%Y-%m-%d %H:%M")
     if record.get("found_by") == "owner":
-        return {**record, "status": VERIFIED, "check_note": "entered by the owner", "retrieved_at": now}
+        return {**record, "status": VERIFIED, "tier": "owner", "check_note": "entered by the owner", "retrieved_at": now}
     if not url.startswith(("http://", "https://")):
         return {**record, "status": UNVERIFIED, "check_note": "no link to check", "retrieved_at": now}
     pages = pages if pages is not None else {}
@@ -145,13 +162,14 @@ def verify(record: dict, get=None, pages: dict | None = None) -> dict:
     title, text = page
     out = {**record, "page_title": record.get("page_title") or title, "retrieved_at": now}
     if matches(record["kind"], record["text"], text):
-        return {**out, "status": VERIFIED, "check_note": "found on the cited page"}
+        return {**out, "status": VERIFIED, "tier": "page fetch", "check_note": "found on the cited page"}
     if len(text) < MIN_PAGE_CHARS:
         return {**out, "status": UNVERIFIED, "check_note": "the page needs a browser to read - open the link to check"}
     return {**out, "status": REJECTED, "check_note": "not found on the cited page"}
 
 
-def record_and_verify(slug: str, items: list[dict], found_by: str = "Claude web search", get=None) -> list[dict]:
+def record_and_verify(slug: str, items: list[dict], found_by: str = "Claude web search", get=None,
+                      citations: list | None = None) -> list[dict]:
     """items: [{kind, text, source_url, subject?, page_title?}] -> checked records, saved to the ledger.
     The same claim from the same page replaces its older record (re-checked, not duplicated)."""
     pages: dict = {}
@@ -160,7 +178,7 @@ def record_and_verify(slug: str, items: list[dict], found_by: str = "Claude web 
         rec = {"id": _id(it["kind"], it["text"], it.get("source_url", "")), "kind": it["kind"],
                "subject": it.get("subject", ""), "text": str(it["text"]), "source_url": it.get("source_url", ""),
                "page_title": it.get("page_title", ""), "found_by": it.get("found_by", found_by)}
-        out.append(verify(rec, get=get, pages=pages))
+        out.append(verify(rec, get=get, pages=pages, citations=citations))
     if slug and out:
         keep = {r["id"]: r for r in load(slug)}
         keep.update({r["id"]: r for r in out})
@@ -170,7 +188,7 @@ def record_and_verify(slug: str, items: list[dict], found_by: str = "Claude web 
 
 def badge(rec: dict) -> dict:
     """What the UI shows next to a web-sourced item."""
-    return {k: rec.get(k) for k in ("id", "status", "retrieved_at", "source_url", "page_title", "check_note", "found_by")}
+    return {k: rec.get(k) for k in ("id", "status", "tier", "retrieved_at", "source_url", "page_title", "check_note", "found_by")}
 
 
 def summary(slug: str) -> dict:

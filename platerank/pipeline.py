@@ -6,7 +6,7 @@ Nothing here is new logic: it calls the existing engines in the same order app.p
 the five owner questions. Every number keeps its provenance label (LIVE / CACHED /
 DEMO / FAILED, SAMPLE, web-found, owner-entered).
 """
-import json, time
+import json, re, time
 from collections import Counter
 from pathlib import Path
 from urllib.parse import urlparse
@@ -25,6 +25,7 @@ from .creators import load_demo_creators, load_live_creators, match_creators, co
 from .content_gen import faq_page, outreach_email
 from . import content_gen
 from .store import answer_runs as store_answer_runs
+from .discovery import _norm as discovery_normalise
 from .store import (save_run, save_answers, load_runs, load_profile, load_example_profile, restaurant_dir,
                     DATA)
 
@@ -475,6 +476,142 @@ def make_before_run(slug: str) -> dict | None:
                      "pack": content_pack_view(slug, profile, t_site, None, faq_text)}}
 
 
+# ------------------------------------------------------------------ qualitative: what AI says / what people say
+PRAISE = ["known for", "great", "excellent", "delicious", "best", "favorite", "favourite", "popular", "loved", "love", "fresh",
+          "authentic", "friendly", "cozy", "cosy", "generous", "worth", "highly rated", "standout", "recommend", "beloved", "solid"]
+CRITIC = ["but ", "however", "pricey", "expensive", "overpriced", "slow", "crowded", "noisy", "loud", "small portion", "mixed",
+          "inconsistent", "complain", "wait", "rude", "bland", "disappointing", "dated"]
+
+
+def _sentences(text: str) -> list[str]:
+    clean = re.sub(r"[*_#`>]+", "", text or "")
+    return [s.strip(" -•\t") for s in re.split(r"(?<=[.!?])\s+|\n+", clean) if len(s.strip()) > 12]
+
+
+def ai_says(profile: dict, rows: list[dict]) -> dict:
+    """Sentences from the saved AI answers that name the restaurant - quotes of AI answers, not facts.
+    No new AI calls."""
+    names = [n.lower() for n in [profile["name"]] + (profile.get("aliases") or []) if n]
+    norm = lambda s: discovery_normalise(s)
+    names_n = [norm(n) for n in names]
+    groups, seen = {"praised": [], "criticised": [], "described": []}, set()
+    for r in rows:
+        if r.get("status") == FAILED or not r.get("mentioned"):
+            continue
+        for s in _sentences(r.get("answer", "")):
+            ns = norm(s)
+            if not any(n in ns for n in names_n) or ns in seen:
+                continue
+            seen.add(ns)
+            low = s.lower()
+            kind = "criticised" if any(w in low for w in CRITIC) else "praised" if any(w in low for w in PRAISE) else "described"
+            groups[kind].append({"quote": s[:400], "question": r["query"], "platform": r.get("platform"),
+                                 "sources": [x["url"] for x in (r.get("sources") or [])][:3]})
+    head = (groups["praised"][:3] + groups["criticised"][:2] + groups["described"])[:5]
+    return {"label": "Quotes of AI answers (what the assistants said), not verified facts.",
+            "counts": {k: len(v) for k, v in groups.items()}, "groups": groups, "headline": head}
+
+
+REVIEWS_PROMPT = (
+    "Search the web for what customers say right now about the restaurant '{name}' at {where}: review and forum pages "
+    "(Yelp, TripAdvisor, Reddit, local blogs, Google review snippets). Reply with ONLY a JSON array (at most 20 items) of "
+    "objects: quote (SHORT verbatim words copied exactly from the page, max 25 words - never paraphrase), rating (stars as "
+    "shown, or null), date (as shown, or null), source_url (the exact page the quote is on), site. Skip anything you can't "
+    "quote word for word. Never invent or summarise.")
+
+
+def public_reviews(slug: str) -> dict | None:
+    return _read(state_dir(slug) / "public_reviews.json", None)
+
+
+def find_public_reviews(slug: str) -> dict:
+    """One Claude + web search call. Every quote goes through the evidence ledger; quotes without a URL
+    (or too long to be verbatim) are dropped. Saved to public_reviews.json."""
+    from . import evidence
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("This searches the web for your own restaurant - the sample is fictional.")
+    profile = get_profile(slug)
+    where = profile.get("address") or ", ".join(x for x in (profile.get("area"), profile.get("city")) if x)
+    r = llm.claude_call(REVIEWS_PROMPT.format(name=profile["name"], where=where),
+                        tools=[llm.web_search_tool(max_uses=5, location=llm.location_for(profile))], max_tokens=6000)
+    try:
+        raw = llm.json_from(r.text or "[]")
+    except ValueError:
+        raw = []
+    raw = [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
+    usable = [x for x in raw if str(x.get("source_url", "")).startswith("http") and x.get("quote")
+              and len(str(x["quote"]).split()) <= 40][:20]
+    recs = evidence.record_and_verify(slug, [{"kind": "quote", "text": str(x["quote"]).strip().strip('"“”'),
+                                              "source_url": x["source_url"], "subject": f"review ({x.get('site') or 'web'})"}
+                                             for x in usable], citations=r.citations)
+    items = [{"quote": rec["text"], "rating": x.get("rating"), "date": x.get("date"), "site": x.get("site"),
+              "source_url": x["source_url"], "evidence": evidence.badge(rec)}
+             for x, rec in zip(usable, recs) if rec["status"] != evidence.REJECTED]
+    data = {"at": time.strftime("%Y-%m-%d %H:%M"), "model": r.model, "cost_usd": round(r.cost_usd, 4), "items": items,
+            "rejected": sum(rec["status"] == evidence.REJECTED for rec in recs), "dropped_no_url": len(raw) - len(usable)}
+    _write(state_dir(slug) / "public_reviews.json", data)
+    return data
+
+
+def _rating(x) -> int | None:
+    try:
+        v = float(str(x).split("/")[0].split()[0])
+        return int(round(v)) if 0 < v <= 5 else None
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def business_value(slug: str) -> dict:
+    """VERIFIED public quotes + owner-pasted reviews -> reviews_vfm (unchanged): aspects, top 3 actions with a
+    linked quote each, and one plain sentence of overall sentiment. Unverified/rejected quotes never count."""
+    profile = get_profile(slug)
+    pub = public_reviews(slug) or {}
+    verified = [x for x in pub.get("items", []) if (x.get("evidence") or {}).get("status") == "verified"]
+    owner = (load_reviews(restaurant_dir(profile["name"]) / "reviews.json") or {}).get("restaurants", {}).get(profile["name"]) \
+        if slug != EXAMPLE_SLUG else None
+    texts = [{"rating": _rating(x.get("rating")) or 3, "text": x["quote"], "url": x["source_url"]} for x in verified]
+    texts += [{"rating": int(r.get("rating") or 3), "text": r["text"], "url": None, "owner": True} for r in (owner or {}).get("reviews", [])]
+    if not texts:
+        return {"ready": False, "reason": "No verified reviews yet - click “Find what people say” or paste reviews in Setup."}
+    seen_r = [_rating(x.get("rating")) for x in verified if _rating(x.get("rating"))]
+    avg = (owner or {}).get("avg_rating") or (round(sum(seen_r) / len(seen_r), 2) if seen_r else 0)
+    a = analyse_restaurant(profile["name"], {"avg_rating": avg, "review_count": len(texts), "price_level": profile.get("price_level"),
+                                             "reviews": [{"rating": t["rating"], "text": t["text"]} for t in texts]},
+                           profile.get("menu", {}), {"entree_avg": None, "entree_n": 0}, 0.0, None, profile.get("anchor_item") or "everyday item")
+    link = lambda q: next((t["url"] for t in texts if q and (q[:60].lower() in t["text"].lower() or t["text"][:60].lower() in q.lower())), None)
+    actions = [{"category": rec["area"], "action": rec["recommendation"], "evidence": rec["evidence"],
+                "quote": rec.get("example_quote"), "source_url": link(rec.get("example_quote"))}
+               for rec in a["recommendations"]][:3]
+    # the engine only recommends with enough evidence; below that, list each complained-about aspect as low evidence
+    for k, v in sorted(a["aspects"].items(), key=lambda kv: -kv[1]["negative"]):
+        if len(actions) >= 3 or not v["negative"] or any(x["category"] == k for x in actions):
+            continue
+        q = (v.get("neg_quotes") or [None])[0]
+        actions.append({"category": k, "action": f"Look into {k.replace('_', ' / ')}",
+                        "evidence": f"{v['negative']} complaint(s) in {len(texts)} reviews" + (" - low evidence, watch for more" if v["negative"] < 3 else ""),
+                        "quote": q, "source_url": link(q)})
+    aspects = {k: {"positive": v["positive"], "negative": v["negative"], "mentions": v["mentions"],
+                   "status": "Doing well - no complaints found" if v["mentions"] and not v["negative"] else
+                             ("No mentions yet" if not v["mentions"] else f"{v['negative']} complaint(s)")}
+               for k, v in a["aspects"].items()}
+    pos = sum(v["positive"] for v in a["aspects"].values()); neg = sum(v["negative"] for v in a["aspects"].values())
+    loved = [k.replace("_", " / ") for k, v in sorted(a["aspects"].items(), key=lambda kv: -kv[1]["positive"]) if v["positive"] > v["negative"]][:2]
+    hit = [(k.replace("_", " / "), v["negative"]) for k, v in sorted(a["aspects"].items(), key=lambda kv: -kv[1]["negative"]) if v["negative"]][:2]
+    tone = "No clear sentiment yet" if not pos + neg else ("Mostly positive" if pos / (pos + neg) >= 0.65 else
+                                                            "Mixed" if pos / (pos + neg) >= 0.4 else "Mostly negative")
+    sentence = tone + (": loved for " + " and ".join(loved) if loved else "") + \
+               ("; " + "; ".join(f"{k} criticised {n} time{'s' if n > 1 else ''}" for k, n in hit) if hit else "") + \
+               f" (from {len(verified)} verified web quote{'s' if len(verified) != 1 else ''}" + \
+               (f" + {len(owner['reviews'])} pasted review{'s' if len(owner['reviews']) != 1 else ''})" if owner and owner.get("reviews") else ")") + "."
+    return {"ready": True, "sentiment": sentence, "actions": actions, "aspects": aspects,
+            "counts": {"verified_quotes": len(verified), "owner_reviews": len((owner or {}).get("reviews", []))}}
+
+
+def people_say(slug: str) -> dict:
+    pub = public_reviews(slug)
+    return {"saved": pub, "business_value": business_value(slug), "can_search": slug != EXAMPLE_SLUG and llm.has_key()}
+
+
 def results(slug: str) -> dict | None:
     profile = get_profile(slug)
     last = _read(state_dir(slug) / "last_run.json", None)
@@ -528,7 +665,7 @@ def results(slug: str) -> dict | None:
         comp = next(n for n in site if n != target)
         site_gaps = diagnose(site[target]["audit"], site[comp]["audit"], comp)
     domains = Counter(_domain(s["url"]) for r in rows for s in (r.get("sources") or []) if s.get("url"))
-    out["why"] = {
+    out["why"] = {"ai_says": ai_says(profile, rows),
         "gaps": gaps, "site_gaps": site_gaps, "site_audit": site,
         "ai_recommends_instead": ai_recommended(rows, [target] + names)[:15],
         "competitor_frequency": json.loads(competitor_frequency(rows).head(12).to_json(orient="records")),

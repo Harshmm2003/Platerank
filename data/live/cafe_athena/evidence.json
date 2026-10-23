@@ -1,0 +1,74 @@
+[
+ {
+  "id": "b8c884d52b6f",
+  "kind": "name",
+  "subject": "Café Athena: name",
+  "text": "Café Athena",
+  "source_url": "https://cafeathena.com/",
+  "page_title": "Authentic Greek and Mediterranean Food - Cafe Athena",
+  "found_by": "Claude web search",
+  "retrieved_at": "2026-10-23 12:50",
+  "status": "verified",
+  "check_note": "found on the cited page"
+ },
+ {
+  "id": "8fc706052140",
+  "kind": "address",
+  "subject": "Café Athena: address",
+  "text": "1846 Garnet Ave, San Diego, CA 92109",
+  "source_url": "https://www.yelp.com/biz/cafe-athena-san-diego-4",
+  "page_title": "",
+  "found_by": "Claude web search",
+  "status": "unverified",
+  "check_note": "the page answered 403 (blocked or gone) - open the link to check",
+  "retrieved_at": "2026-10-23 12:50"
+ },
+ {
+  "id": "f8aa6e971825",
+  "kind": "quote",
+  "subject": "Café Athena: neighbourhood",
+  "text": "Pacific Beach",
+  "source_url": "https://www.tripadvisor.com/Restaurant_Review-g60750-d3461449-Reviews-Cafe_Athena-San_Diego_California.html",
+  "page_title": "",
+  "found_by": "Claude web search",
+  "status": "unverified",
+  "check_note": "the page answered 403 (blocked or gone) - open the link to check",
+  "retrieved_at": "2026-10-23 12:50"
+ },
+ {
+  "id": "060774b415b5",
+  "kind": "quote",
+  "subject": "Café Athena: cuisine",
+  "text": "Greek",
+  "source_url": "https://www.yelp.com/biz/cafe-athena-san-diego-4",
+  "page_title": "",
+  "found_by": "Claude web search",
+  "status": "unverified",
+  "check_note": "the page answered 403 (blocked or gone) - open the link to check",
+  "retrieved_at": "2026-10-23 12:50"
+ },
+ {
+  "id": "14ad26cbd42a",
+  "kind": "website",
+  "subject": "Café Athena: website",
+  "text": "https://cafeathena.com/",
+  "source_url": "https://www.yelp.com/biz/cafe-athena-san-diego-4",
+  "page_title": "",
+  "found_by": "Claude web search",
+  "status": "unverified",
+  "check_note": "the page answered 403 (blocked or gone) - open the link to check",
+  "retrieved_at": "2026-10-23 12:50"
+ },
+ {
+  "id": "b0835ba77a11",
+  "kind": "hours",
+  "subject": "Café Athena: hours",
+  "text": "Sun–Thu 11am–9pm, Fri–Sat 11am–9:30pm; happy hour daily 3–6pm",
+  "source_url": "https://maps.apple.com/place?place-id=IF11C1ABEDAC42A4F",
+  "page_title": "Cafe Athena in San Diego, CA United States - Apple Maps",
+  "found_by": "Claude web search",
+  "retrieved_at": "2026-10-23 12:50",
+  "status": "rejected",
+  "check_note": "not found on the cited page"
+ }
+]

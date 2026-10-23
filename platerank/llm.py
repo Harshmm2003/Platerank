@@ -82,6 +82,7 @@ class ClaudeResult:
     input_tokens: int = 0
     output_tokens: int = 0
     refused: bool = False
+    citations: list = field(default_factory=list)  # [{url, title, cited_text}] from web_search citations
 
     @property
     def cost_usd(self) -> float:
@@ -156,7 +157,7 @@ def claude_call(prompt, system: str | None = None, model: str | None = None, too
     except anthropic.APIError as e:
         raise ClaudeUnavailable(_plain_reason(e)) from e
 
-    text, sources, seen = [], [], set()
+    text, sources, seen, cited = [], [], set(), []
 
     def add_source(url, title):
         if url and url not in seen:
@@ -168,6 +169,8 @@ def claude_call(prompt, system: str | None = None, model: str | None = None, too
             text.append(b.text)
             for c in getattr(b, "citations", None) or []:
                 add_source(getattr(c, "url", None), getattr(c, "title", None))
+                if getattr(c, "url", None) and getattr(c, "cited_text", None):
+                    cited.append({"url": c.url, "title": getattr(c, "title", "") or "", "cited_text": c.cited_text})
         elif b.type == "web_search_tool_result" and isinstance(getattr(b, "content", None), list):
             for r in b.content:
                 add_source(getattr(r, "url", None), getattr(r, "title", None))
@@ -180,7 +183,7 @@ def claude_call(prompt, system: str | None = None, model: str | None = None, too
         input_tokens=(u.input_tokens or 0) + (getattr(u, "cache_read_input_tokens", 0) or 0)
                      + (getattr(u, "cache_creation_input_tokens", 0) or 0),
         output_tokens=u.output_tokens or 0,
-        refused=msg.stop_reason == "refusal")
+        refused=msg.stop_reason == "refusal", citations=cited)
 
 
 def json_from(text: str):

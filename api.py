@@ -342,6 +342,20 @@ def website_pack(slug: str):
                     headers={"Content-Disposition": f'attachment; filename="{slugify(p["name"])}-website-pack.zip"'})
 
 
+@app.get("/api/restaurants/{slug}/people-say")
+def people_say(slug: str):
+    _profile_or_404(slug)
+    return pipeline.people_say(slug)
+
+
+@app.post("/api/restaurants/{slug}/people-say/search")
+def people_say_search(slug: str):
+    """One Claude + web search call; every quote checked against its page before it is shown or used."""
+    _profile_or_404(slug)
+    pipeline.find_public_reviews(slug)
+    return pipeline.people_say(slug)
+
+
 # ------------------------------------------------------------------ frontend
 if (WEB / "assets").exists():
     app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")

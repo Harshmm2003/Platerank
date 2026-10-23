@@ -95,6 +95,7 @@ export type Results = {
     answers_list: { query: string; category: string; platform: string; model: string; run: number; status: string; mentions: string[]; mentioned: boolean; rank: number | null; answer: string; note: string; sources: Source[] }[];
   };
   why: {
+    ai_says: AiSays;
     gaps: Gap[]; site_gaps: string[]; site_audit: Record<string, { audit: Record<string, unknown>; source: string }>;
     ai_recommends_instead: { restaurant: string; answers_naming_it: number }[];
     competitor_frequency: { restaurant: string; appearances: number; share: number }[];
@@ -139,5 +140,14 @@ export type Compare = { comparable: boolean; label: string; reason?: string; che
   platforms?: string[]; first?: Snap; latest?: Snap; change?: { mention_rate: number | null; avg_rank: number | null; share_of_voice: number | null };
   by_category?: { category: string; first: number | null; latest: number | null; questions?: number }[] };
 
-export type Evidence = { id: string; status: "verified" | "unverified" | "rejected"; retrieved_at: string; source_url: string;
+export type Evidence = { id: string; status: "verified" | "unverified" | "rejected"; tier?: string; retrieved_at: string; source_url: string;
   page_title?: string; check_note?: string; found_by?: string; kind?: string; subject?: string; text?: string };
+
+export type AiQuote = { quote: string; question: string; platform?: string; sources: string[] };
+export type AiSays = { label: string; counts: Record<string, number>; groups: Record<"praised" | "criticised" | "described", AiQuote[]>; headline: AiQuote[] };
+export type PublicQuote = { quote: string; rating?: string | number | null; date?: string | null; site?: string; source_url: string; evidence: Evidence };
+export type PeopleSay = { can_search: boolean;
+  saved: { at: string; items: PublicQuote[]; rejected: number; dropped_no_url: number } | null;
+  business_value: { ready: boolean; reason?: string; sentiment?: string; counts?: Record<string, number>;
+    actions?: { category: string; action: string; evidence: string; quote?: string; source_url?: string | null }[];
+    aspects?: Record<string, { positive: number; negative: number; mentions: number; status: string }> } };

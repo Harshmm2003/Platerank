@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, Evidence, pct, PackPiece, Results as R } from "./api";
+import { AiQuote, api, ApiError, Evidence, PeopleSay, pct, PackPiece, Results as R } from "./api";
 import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
@@ -84,7 +84,7 @@ function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () =>
         </div>
       </div>
       <TabNav slug={r.slug} tab={active} />
-      {active === "make" ? <Make r={r} reload={reload} /> : (
+      {active === "make" ? <Make r={r} reload={reload} /> : active === "change" ? <PeopleSaySection slug={r.slug} /> : (
         <Card>
           <p className="text-stone-700">Run a check first - this answer comes from asking AI assistants the questions your customers ask.</p>
           <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button></div>
@@ -172,6 +172,7 @@ function Why({ r, reload }: { r: R; reload: () => void }) {
   return (
     <div className="space-y-5">
       <ErrorNote error={error} />
+      <AiSaysCard r={r} />
       <Card>
         <h3 className="font-semibold">The biggest reasons</h3>
         {w.gaps.length === 0 && w.site_gaps.length === 0 && (
@@ -292,6 +293,7 @@ function Change({ r, reload }: { r: R; reload: () => void }) {
   const groups = (["standard", "creator", "vfm"] as const).map((k) => [k, ch.moves.filter((m) => m.route === k)] as const);
   return (
     <div className="space-y-5">
+      <PeopleSaySection slug={r.slug} />
       <Card>
         <h3 className="font-semibold">Your to-do list, most important first</h3>
         <p className="text-sm text-stone-500">Each item comes from the evidence in step 2 and says which tool fixes it.</p>
@@ -623,5 +625,110 @@ function SourcesPanel({ slug }: { slug: string }) {
         </table>
       </More>
     </Card>
+  );
+}
+
+const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+
+function QuoteRow({ q }: { q: AiQuote }) {
+  return (
+    <li className="border-t border-stone-100 py-2 text-sm">
+      <div>“{q.quote}”</div>
+      <div className="mt-0.5 text-xs text-stone-500">asked: {q.question}{q.platform ? ` · ${q.platform}` : ""}
+        {q.sources.map((u) => <a key={u} className="ml-2 text-sky-700 hover:underline" href={u} target="_blank" rel="noreferrer">{host(u)} ↗</a>)}</div>
+    </li>
+  );
+}
+
+/** What the AI assistants said about the restaurant, from the saved answers (no new AI calls). */
+function AiSaysCard({ r }: { r: R }) {
+  const a = r.why.ai_says;
+  if (!a) return null;
+  const total = a.counts.praised + a.counts.criticised + a.counts.described;
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold">What AI says about you</h3>
+        <Badge kind="neutral">{a.label}</Badge>
+      </div>
+      {total === 0 ? <p className="mt-2 text-sm text-stone-500">No AI answer named you in this check, so there's nothing to quote yet.</p> : <>
+        <p className="mt-1 text-sm text-stone-500">Praised in {a.counts.praised} · criticised in {a.counts.criticised} · described in {a.counts.described} sentences.</p>
+        <ul className="mt-2">{a.headline.map((q, i) => <QuoteRow key={i} q={q} />)}</ul>
+        {(["praised", "criticised", "described"] as const).map((k) => a.groups[k].length > 0 && (
+          <More key={k} label={`${k === "praised" ? "Praised for" : k === "criticised" ? "Criticised for" : "Described as"} (${a.groups[k].length})`}>
+            <ul>{a.groups[k].map((q, i) => <QuoteRow key={i} q={q} />)}</ul>
+          </More>
+        ))}
+      </>}
+    </Card>
+  );
+}
+
+/** Public reviews/forum quotes (one Claude web search), checked one by one, then Business Value from verified ones only. */
+function PeopleSaySection({ slug }: { slug: string }) {
+  const [d, setD] = useState<PeopleSay | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => api.get<PeopleSay>(`/api/restaurants/${slug}/people-say`).then(setD).catch((e) => setError(e.message)), [slug]);
+  useEffect(() => { load(); }, [load]);
+  async function search() {
+    if (d?.saved && !window.confirm("Search the web again? This replaces the saved quotes with a fresh search by Claude.")) return;
+    setBusy(true); setError(null);
+    try { setD(await api.post<PeopleSay>(`/api/restaurants/${slug}/people-say/search`)); } catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
+  if (!d) return null;
+  const items = d.saved?.items || [];
+  const shown = items.filter((x) => x.evidence.status === "verified"), grey = items.filter((x) => x.evidence.status !== "verified");
+  const bv = d.business_value;
+  return (
+    <div className="space-y-5">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">What people say right now</h3>
+            <p className="text-sm text-stone-500">Short quotes from public review and forum pages. Each one is checked on its page before it counts.</p>
+          </div>
+          <Button small kind={d.saved ? "secondary" : "primary"} busy={busy} disabled={!d.can_search}
+            title={d.can_search ? "" : "Needs a Claude key in .env"} onClick={search}>{d.saved ? "Search again" : "Find what people say"}</Button>
+        </div>
+        {busy && <SlowBar label="Claude is searching review and forum pages, then we check every quote on its page… (20–60 seconds)" />}
+        <ErrorNote error={error} />
+        {d.saved && <>
+          <p className="mt-2 text-xs text-stone-500">Searched {d.saved.at}: {shown.length} verified · {grey.length} couldn't be checked · {d.saved.rejected} rejected (not found on the cited page)
+            {d.saved.dropped_no_url ? ` · ${d.saved.dropped_no_url} dropped (no link or too long to be word-for-word)` : ""}.</p>
+          <ul className="mt-2">{shown.map((x, i) => (
+            <li key={i} className="border-t border-stone-100 py-2 text-sm">
+              <div>“{x.quote}” {x.rating != null && <span className="text-stone-500">· {String(x.rating)}★</span>} {x.date && <span className="text-stone-500">· {x.date}</span>}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-stone-500">{x.site || host(x.source_url)} <EvidenceBadge ev={x.evidence} /></div>
+            </li>))}</ul>
+          {grey.length > 0 && <More label={`Not checked (${grey.length}) - not used`}>
+            <ul>{grey.map((x, i) => <li key={i} className="border-t border-stone-100 py-2 text-sm text-stone-400">“{x.quote}” <EvidenceBadge ev={x.evidence} /></li>)}</ul>
+          </More>}
+        </>}
+      </Card>
+      <Card>
+        <h3 className="font-semibold">Business value - what reviews say to fix</h3>
+        {!bv.ready ? <p className="mt-1 text-sm text-stone-500">{bv.reason}</p> : <>
+          <p className="mt-1 font-medium">{bv.sentiment}</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {Object.entries(bv.aspects || {}).map(([k, v]) => (
+              <div key={k} className={cx("rounded-lg p-2 text-sm", v.negative ? "bg-amber-50" : v.mentions ? "bg-green-50" : "bg-stone-50")}>
+                <div className="font-medium">{k.replace("_", " / ")}</div><div className="text-xs text-stone-600">{v.status}</div>
+                <div className="text-xs text-stone-400">{v.positive} 👍 · {v.negative} 👎</div>
+              </div>))}
+          </div>
+          <h4 className="mt-4 text-sm font-semibold">Top actions</h4>
+          {(bv.actions || []).length === 0 ? <p className="text-sm text-stone-500">No complaints strong enough to act on - doing well.</p> :
+            <ol className="mt-1 space-y-2">{(bv.actions || []).map((x, i) => (
+              <li key={i} className="rounded-lg bg-stone-50 p-2 text-sm">
+                <div><Badge kind="vfm">{x.category}</Badge> <span className="font-medium">{x.action}</span></div>
+                <div className="mt-0.5 text-xs text-stone-500">{x.evidence}</div>
+                {x.quote && <div className="mt-0.5 text-xs">“{x.quote}” {x.source_url && <a className="text-sky-700" href={x.source_url} target="_blank" rel="noreferrer">{host(x.source_url)} ↗</a>}</div>}
+              </li>))}</ol>}
+          <p className="mt-2 text-xs text-stone-400">Only verified quotes and reviews you pasted are counted. Same formulas as the Value-for-Money engine.</p>
+        </>}
+      </Card>
+    </div>
   );
 }
