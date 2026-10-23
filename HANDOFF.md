@@ -1,4 +1,9 @@
-# PlateRank AI — handoff (Oct 22, 2026, evening)
+# PlateRank AI — handoff
+
+> **Oct 23, 2026, 4pm — final state:** see `README.md` for what PlateRank does now (7 tabs, Café Athena live
+> results, how to run and test it). The live case changed from YONO Sushi to **Café Athena** (San Diego).
+> Everything below is the Oct 22 evening snapshot, kept for history.
+
 
 Hackathon: NYU SPS x Pulse Foundry, **Friday Oct 23, 2026, 9:00–19:00**. Live demo restaurant: **YONO Sushi
 (by BondST), Moynihan Train Hall, 421 8th Ave, NYC**. Goal: a live, general prototype that works for ANY
