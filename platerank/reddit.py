@@ -159,6 +159,53 @@ def draft(profile: dict, subs: list[dict], threads: list[dict]) -> list[dict]:
     return drafts
 
 
+OWNER_SUB_NOTE = "Added by you - we couldn't check this subreddit's rules. Read them before posting."
+
+
+def owner_posts(slug: str, profile: dict, subreddit: str) -> dict:
+    """The owner names a subreddit they know. We draft 2 new posts in the owner's voice from the profile only
+    (written by code - no AI call). Labelled 'Draft - you post it'; the rules are the owner's to check."""
+    name = _sub_name(subreddit)
+    if not re.fullmatch(r"[A-Za-z0-9_]{2,21}", name or ""):
+        raise ValueError("Type the subreddit's name, e.g. sandiego (or r/sandiego).")
+    evidence.record_and_verify(slug, [{"kind": "subreddit", "text": name, "source_url": f"https://www.reddit.com/r/{name}/",
+                                       "subject": "subreddit (added by you)", "found_by": "owner"}])
+    p, owner = profile, f"Owner of {profile['name']} here"
+    hl = [h.lower() for h in p.get("highlights") or []]
+    hh = re.search(r"happy hour[:\s]+([^;,\n]+)", p.get("hours") or "", re.I)
+    where = f"{p.get('address') or p['area']}" + (f" in {p.get('neighbourhood')}" if p.get("neighbourhood") and p["neighbourhood"] not in (p.get("address") or "") else "")
+    cocktails = next((h for h in p.get("highlights") or [] if "cocktail" in h.lower()), None)
+    posts = []
+    if hh:
+        posts.append({"title": f"{owner} - happy hour {hh.group(1).strip()} on {where.split(',')[0]}",
+                      "text": f"{owner}. Our happy hour runs {hh.group(1).strip()} at {where}." +
+                              (f" We have a full bar{' with ' + cocktails if cocktails and cocktails.lower() != 'cocktails' else ' with cocktails'}." if any('bar' in h or 'cocktail' in h for h in hl) else "") +
+                              f" Hours: {p.get('hours')}. Happy to answer questions here."})
+    if cocktails or any("bar" in h for h in hl):
+        posts.append({"title": f"{owner} - {cocktails or 'cocktails'} and {p['cuisine']} food, ask me anything",
+                      "text": f"{owner}. We serve {p['cuisine']} food" + (f" (also described as {', '.join(p.get('cuisine_alternates') or [])})" if p.get("cuisine_alternates") else "") +
+                              f" at {where}" + (f", open since {p['year_opened']}" if p.get("year_opened") else "") + "." +
+                              (f" The bar serves {cocktails}." if cocktails else " We have a full bar.") +
+                              (f" Happy hour: {hh.group(1).strip()}." if hh else "") +
+                              (" We also have " + " and ".join(h for h in p.get("highlights") or [] if re.search(r"gluten|vegan|vegetarian", h, re.I)) + " options." if any(re.search(r"gluten|vegan|vegetarian", h) for h in hl) else "") +
+                              " Ask me anything about the menu."})
+    facts = content_gen.pack_facts(p)
+    data = load(slug)
+    subs = [s for s in data.get("subreddits", []) if s["name"] != name] + [{"name": name, "url": f"https://www.reddit.com/r/{name}/", "added_by_owner": True,
+             "evidence": {"status": "verified", "tier": "owner", "check_note": "added by you"}, "rules_url": f"https://www.reddit.com/r/{name}/about/rules/",
+             "rule_quote": None, "self_promotion": "unknown - read the rules", "weekly_thread": None, "flair_required": None}]
+    drafts = [d for d in data.get("drafts", []) if not d["key"].startswith(f"reddit_owner_{name}_")]
+    for i, x in enumerate(posts[:2]):
+        title, f1 = content_gen.guard_facts(x["title"], facts)
+        body, f2 = content_gen.guard_facts(x["text"], facts)
+        drafts.append({"key": f"reddit_owner_{name}_{i + 1}", "type": "post", "subreddit": name, "post_title": title,
+                       "title": f"Draft - you post it: r/{name} post {i + 1}", "text": body, "flags": f1 + f2,
+                       "rule": None, "owner_note": OWNER_SUB_NOTE, "flair_required": None})
+    data.update(subreddits=subs, drafts=drafts, posted=data.get("posted", {}), at=data.get("at") or time.strftime("%Y-%m-%d %H:%M"))
+    _save(slug, data)
+    return data
+
+
 def submit_link(subreddit: str, title: str, text: str) -> str:
     """reddit.com/r/<sub>/submit pre-filled. Reddit doesn't document these parameters (title / text / selftext come
     from the old submit form), so the screen ALSO copies the text - if the box is empty, paste."""

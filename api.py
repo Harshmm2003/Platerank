@@ -248,6 +248,8 @@ class RunIn(BaseModel):
     reuse: bool = True
     web_search: bool = True
     platforms: list[str] | None = None
+    categories: list[str] | None = None  # re-check only these question types
+    note: str | None = Field(None, max_length=200)
 
 
 @app.get("/api/restaurants/{slug}/estimate")
@@ -271,7 +273,7 @@ def start_run(slug: str, body: RunIn):
 
     def work():
         try:
-            job["meta"] = pipeline.run(slug, body.runs, body.reuse, body.platforms, body.web_search,
+            job["meta"] = pipeline.run(slug, body.runs, body.reuse, body.platforms, body.web_search, categories=body.categories, note=body.note,
                                        progress=progress, should_stop=lambda: job["stop"])
             job["state"] = "done"
         except Exception as e:
@@ -392,6 +394,17 @@ def reddit_find(slug: str):
     """Claude + web search for subreddits (+ rules) and live threads, every item checked; then owner-voiced drafts."""
     _profile_or_404(slug)
     return pipeline.farm_find(slug)
+
+
+class OwnerSubIn(BaseModel):
+    subreddit: str
+
+
+@app.post("/api/restaurants/{slug}/reddit/owner-sub")
+def reddit_owner_sub(slug: str, body: OwnerSubIn):
+    """A subreddit the owner knows -> 2 owner-voiced post drafts written by code from the profile (no AI, no cost)."""
+    _profile_or_404(slug)
+    return pipeline.farm_owner_sub(slug, body.subreddit)
 
 
 class PostedIn(BaseModel):

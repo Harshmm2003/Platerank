@@ -50,6 +50,8 @@ def main(argv=None, ask=input, interactive=None) -> int:
     ap.add_argument("slug", help="restaurant folder name, e.g. cafe_athena")
     ap.add_argument("--yes", action="store_true", help="don't ask - for scheduled runs")
     ap.add_argument("--runs", type=int, default=1, choices=(1, 2, 3))
+    ap.add_argument("--categories", nargs="*", default=None, help="only these question types, e.g. happy-hour drinks")
+    ap.add_argument("--note", default=None, help="honest label saved with the result")
     args = ap.parse_args(argv)
     interactive = sys.stdin.isatty() if interactive is None else interactive
 
@@ -87,7 +89,8 @@ def main(argv=None, ask=input, interactive=None) -> int:
     def progress(done, total, note):
         print(f"\r  {done}/{total} {note[:60]:60}", end="", flush=True)
     try:
-        meta = pipeline.run(args.slug, args.runs, reuse=False, platforms=platforms, web_search=web_search, progress=progress)
+        meta = pipeline.run(args.slug, args.runs, reuse=False, platforms=platforms, web_search=web_search, progress=progress,
+                            categories=args.categories or None, note=args.note)
     except (ValueError, llm.ClaudeUnavailable, llm.QuotaError) as e:
         print(f"\nThe re-check stopped: {e}")
         return 1

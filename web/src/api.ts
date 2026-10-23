@@ -141,7 +141,9 @@ export type ContentPack = { pieces: PackPiece[]; is_sample: boolean; generated: 
 type Snap = { when: string; mention_rate: number; avg_rank: number | null; share_of_voice: number; answers?: number };
 export type Compare = { comparable: boolean; label: string; reason?: string; checks?: number; compared_checks?: number; skipped?: number;
   platforms?: string[]; first?: Snap; latest?: Snap; change?: { mention_rate: number | null; avg_rank: number | null; share_of_voice: number | null };
-  by_category?: { category: string; first: number | null; latest: number | null; questions?: number }[] };
+  by_category?: { category: string; first: number | null; latest: number | null; questions?: number }[];
+  partial?: { when: string; first_when?: string; note: string; reason?: string; questions?: number;
+    by_category: { category: string; first: number | null; latest: number | null; questions?: number }[] } | null };
 
 export type Evidence = { id: string; status: "verified" | "unverified" | "rejected"; tier?: string; retrieved_at: string; source_url: string;
   page_title?: string; check_note?: string; found_by?: string; kind?: string; subject?: string; text?: string };
@@ -152,7 +154,7 @@ export type PublicQuote = { quote: string; rating?: string | number | null; date
 export type PeopleSay = { can_search: boolean;
   saved: { at: string; items: PublicQuote[]; rejected: number; dropped_no_url: number } | null;
   business_value: { ready: boolean; reason?: string; sentiment?: string; counts?: Record<string, number>;
-    actions?: { category: string; action: string; evidence: string; quote?: string; source_url?: string | null }[];
+    actions?: { category: string; action: string; evidence: string; quote?: string; source_url?: string | null; kind?: "gap" | "complaint"; label?: string }[];
     aspects?: Record<string, { positive: number; negative: number; mentions: number; status: string }> } };
 
 export type SiteNow = { at: string; url: string; ok: boolean; note?: string; title?: string;
@@ -160,7 +162,7 @@ export type SiteNow = { at: string; url: string; ok: boolean; note?: string; tit
 export type Housekeeping = { site_now: SiteNow | null; reminders: Record<string, number>; pdf_keys: string[];
   social: { hashtags: string[]; keywords: string[]; checklist: string[]; note: string } };
 
-export type RedditDraft = { key: string; type: "reply" | "post"; subreddit: string; title: string; text: string; flags: string[];
+export type RedditDraft = { key: string; type: "reply" | "post"; subreddit: string; title: string; text: string; flags: string[]; owner_note?: string;
   thread_url?: string; thread_title?: string; post_title?: string; rule?: string | null; flair_required?: boolean | null };
 export type Farm = { at?: string; note: string; post_note: string; can_search: boolean;
   subreddits?: { name: string; url: string; evidence: Evidence; rules_url?: string; rule_quote?: string | null; rule_evidence?: Evidence | null;

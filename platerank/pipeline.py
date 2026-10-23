@@ -142,8 +142,11 @@ def nearby(slug: str | None, lat: float, lon: float, radius: int, cuisine: str =
 
 # ------------------------------------------------------------------ Discovery
 def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | None = None,
-        web_search: bool = True, progress=None, should_stop=None) -> dict:
-    """Runs Discovery for one restaurant and saves the rows. Returns run meta."""
+        web_search: bool = True, progress=None, should_stop=None, categories: list[str] | None = None,
+        note: str | None = None) -> dict:
+    """Runs Discovery for one restaurant and saves the rows. Returns run meta.
+    categories: re-check only these question types (a PARTIAL check - saved apart, compared per question type,
+    never replaces the full check on screen). note: an honest label shown with the result."""
     profile = get_profile(slug)
     if profile is None:
         raise ValueError("Unknown restaurant")
@@ -152,6 +155,10 @@ def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | Non
     if not names:
         raise ValueError("Add at least one competitor first.")
     queries = example_queries() if is_example else generate_queries(profile)
+    if categories:
+        queries = [q for q in queries if q.category in categories]
+        if not queries:
+            raise ValueError("None of the chosen question types are in this restaurant's questions.")
     chosen = ["demo"] if is_example else (platforms or available_platforms() or list(cached_platforms(slug)))
     if not chosen:
         raise ValueError("No AI key in .env - add ANTHROPIC_API_KEY to run a live check, or try the sample.")
@@ -167,8 +174,9 @@ def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | Non
     meta = {"ts": time.time(), "when": time.strftime("%Y-%m-%d %H:%M"), "platforms": chosen,
             "runs": 1 if is_example else runs, "web_search": web_search and not is_example,
             "counts": counts, "cost_usd": round(sum(r.get("cost_usd", 0) for r in rows), 3),
-            "questions": len(queries)}
-    _write(state_dir(slug) / "last_run.json", {"meta": meta, "rows": rows})
+            "questions": len(queries), "categories": categories or None, "note": note}
+    # a partial re-check is kept apart so the full scorecard on screen stays complete
+    _write(state_dir(slug) / ("partial_run.json" if categories else "last_run.json"), {"meta": meta, "rows": rows})
     if ok and not is_example:
         answers_ts = save_answers(target, rows)
         card = scorecard(ok, target, names)
@@ -180,7 +188,9 @@ def run(slug: str, runs: int = 1, reuse: bool = True, platforms: list[str] | Non
                                            "runs": runs, **{k.lower(): v for k, v in counts.items()},
                                            "bank_hash": bank_hash(q.text for q in queries), "platforms": chosen,
                                            "web_search": web_search, "answers_run_ts": answers_ts,
-                                           "by_category": _cat_rates(ok)})
+                                           "by_category": _cat_rates(ok), "partial": bool(categories),
+                                           "categories": categories or None, "note": note,
+                                           "queries": sorted({r["query"] for r in ok}) if categories else None})
     return meta
 
 
@@ -212,22 +222,43 @@ def _enrich(run: dict, groups: dict) -> dict:
             "by_category": run.get("by_category") or _cat_rates(rows)}
 
 
+def _partial_compare(every: list[dict], groups: dict) -> dict | None:
+    """Latest partial re-check vs the earliest full check that asked the SAME questions on the same platforms."""
+    parts = [r for r in every if r.get("partial")]
+    if not parts:
+        return None
+    p = parts[-1]
+    asked = set(p.get("queries") or [])
+    for f in [r for r in every if not r.get("partial")]:
+        rows = groups.get(f.get("answers_run_ts")) or []
+        if f["platforms"] == p["platforms"] and f.get("web_search") == p.get("web_search") and asked and asked <= {x["query"] for x in rows}:
+            fr = _cat_rates([x for x in rows if x["query"] in asked])
+            return {"when": time.strftime("%Y-%m-%d %H:%M", time.localtime(p["ts"])), "first_when": time.strftime("%Y-%m-%d %H:%M", time.localtime(f["ts"])),
+                    "note": p.get("note") or DIRECTIONAL, "questions": len(asked),
+                    "by_category": [{"category": c, "first": fr.get(c, {}).get("rate"), "latest": v["rate"], "questions": v["questions"]}
+                                    for c, v in sorted(p["by_category"].items())]}
+    return {"when": time.strftime("%Y-%m-%d %H:%M", time.localtime(p["ts"])), "note": p.get("note") or DIRECTIONAL,
+            "reason": "No earlier full check asked exactly these questions, so there's nothing to compare yet.", "by_category": []}
+
+
 def improvement(slug: str) -> dict:
     """First vs latest check - only runs with the same question bank, platforms and web-search setting."""
     if slug == EXAMPLE_SLUG:
         return {"comparable": False, "reason": "The sample has no history - run your own restaurant twice.", "label": DIRECTIONAL}
     target = get_profile(slug)["name"]
     groups = store_answer_runs(target)
-    runs = [_enrich(r, groups) for r in load_runs(target)]
+    every = [_enrich(r, groups) for r in load_runs(target)]
+    runs = [r for r in every if not r.get("partial")]
+    part = _partial_compare(every, groups)
     if len(runs) < 2:
-        return {"comparable": False, "checks": len(runs), "label": DIRECTIONAL,
+        return {"comparable": False, "checks": len(runs), "label": DIRECTIONAL, "partial": part,
                 "reason": "Only one check so far - run a fresh re-check to see before and after." if runs else "No checks yet."}
     latest = runs[-1]
     same = lambda a: (a["bank_hash"] and a["bank_hash"] == latest["bank_hash"] and a["platforms"] == latest["platforms"]
                       and (a.get("web_search") is None or latest.get("web_search") is None or a["web_search"] == latest["web_search"]))
     earlier = [r for r in runs[:-1] if same(r)]
     if not earlier:
-        return {"comparable": False, "checks": len(runs), "label": DIRECTIONAL,
+        return {"comparable": False, "checks": len(runs), "label": DIRECTIONAL, "partial": part,
                 "reason": "No earlier check used the same questions, AI platform and web-search setting as the latest one, "
                           "so they aren't compared."}
     first = earlier[0]
@@ -235,7 +266,7 @@ def improvement(slug: str) -> dict:
                       "avg_rank": r.get("avg_rank"), "share_of_voice": r["share_of_voice"], "answers": r.get("answers")}
     delta = lambda k: None if first.get(k) is None or latest.get(k) is None else round(latest[k] - first[k], 3)
     cats = sorted(set(first["by_category"]) | set(latest["by_category"]))
-    return {"comparable": True, "label": DIRECTIONAL, "checks": len(runs), "compared_checks": len(earlier) + 1,
+    return {"comparable": True, "label": DIRECTIONAL, "partial": part, "checks": len(runs), "compared_checks": len(earlier) + 1,
             "skipped": len(runs) - 1 - len(earlier), "platforms": latest["platforms"],
             "first": pick(first), "latest": pick(latest),
             "change": {k: delta(k) for k in ("mention_rate", "avg_rank", "share_of_voice")},
@@ -507,7 +538,10 @@ def overview(slug: str, out: dict) -> dict:
     # 4 business value
     tabs["business"] = bv.get("sentiment") if bv.get("ready") else bv.get("reason", "")
     # 5 data farming
-    if fv.get("at") and not fv.get("threads") and not fv.get("subreddits"):
+    if fv.get("drafts") and not fv.get("threads"):
+        tabs["farm"] = (f"{len(fv['drafts'])} post drafts ready for r/{', r/'.join(sorted({d['subreddit'] for d in fv['drafts']}))} - "
+                        "you post them yourself. No live threads could be checked yet.")
+    elif fv.get("at") and not fv.get("threads") and not fv.get("subreddits"):
         tabs["farm"] = ("No Reddit conversations could be checked yet - Reddit keeps its pages from automated checks, "
                         "so nothing unverified is used. Try again later.")
     elif fv.get("at"):
@@ -531,8 +565,9 @@ def overview(slug: str, out: dict) -> dict:
         if not s.startswith("No structural gaps"):
             items.append({"id": "site:" + slugify(s)[:60], "title": s, "why": "Found when we compared your website with the top competitor's.",
                           "link": profile.get("website"), "tab": "housekeeping", "rank": (1, 0)})
-    for i, a in enumerate(bv.get("actions") or []):
-        items.append({"id": "bv:" + a["category"], "title": f"{a['category'].replace('_', ' / ').capitalize()}: {a['action']}",
+    for i, a in enumerate((bv.get("actions") or [])[:3]):
+        items.append({"id": "bv:" + a["category"], "title": (f"Gap - never mentioned ({a['category']}): " if a.get("kind") == "gap"
+                                                             else f"{a['category'].replace('_', ' / ').capitalize()}: ") + a["action"],
                       "why": _first_line(a["evidence"] + (f' - “{a["quote"]}”' if a.get("quote") else "")), "link": a.get("source_url"),
                       "tab": "business", "rank": (2, i)})
     for i, p_ in enumerate([p_ for p_ in pieces if p_["key"] not in approvals][:3]):
@@ -691,6 +726,37 @@ def _rating(x) -> int | None:
         return None
 
 
+GAP_TOPICS = {  # topic -> (words that count as a mention, the concrete step) - real guests only, never fake reviews
+    "price_value": (None, "Show prices where people look (Google profile, website menu) and ask regulars who feel it's good value to say so in a review."),
+    "ambience": (None, "Post current photos of the dining room on Google and Yelp, and invite guests to describe the atmosphere when they review."),
+    "portion_wait": (None, "When guests praise the portions or how quick the food came, ask them to mention it in their review."),
+    "drinks": (r"cocktail|drink|bar\b|wine|beer|ouzo", "Ask happy-hour guests to mention the cocktails in their reviews, and put the cocktail list on your website."),
+    "happy hour": (r"happy hour", "Put the happy hour (days and times) on your Google profile and website, and ask happy-hour guests to mention it in reviews."),
+    "catering & events": (r"cater|private event|party|parties|group", "After each catering job or private event, ask the host for a review that mentions it."),
+}
+GAP_NEEDS = {"drinks": r"cocktail|bar\b|wine|beer|drink", "happy hour": r"happy hour", "catering & events": r"cater|private|event|group"}
+
+
+def _gap_actions(profile: dict, aspects: dict, texts: list[dict]) -> list[dict]:
+    """An aspect / owner highlight that NO verified review mentions is a real finding: 'Gap: never mentioned'."""
+    hl = " ".join(profile.get("highlights") or []).lower()
+    n = len(texts)
+    out = []
+    for topic, (pattern, step) in GAP_TOPICS.items():
+        if topic in aspects:
+            missing = aspects[topic]["mentions"] == 0
+        else:
+            if not re.search(GAP_NEEDS[topic], hl):
+                continue  # only for things the owner says the place offers
+            missing = not any(re.search(pattern, t["text"].lower()) for t in texts)
+        if missing:
+            label = topic.replace("_", " / ")
+            out.append({"category": label, "kind": "gap", "action": step, "label": "Gap: never mentioned",
+                        "evidence": f"0 of {n} verified reviews mention {label}", "quote": None, "source_url": None})
+    order = ["drinks", "happy hour", "price / value", "catering & events", "ambience", "portion / wait"]
+    return sorted(out, key=lambda x: order.index(x["category"]) if x["category"] in order else 99)
+
+
 def business_value(slug: str) -> dict:
     """VERIFIED public quotes + owner-pasted reviews -> reviews_vfm (unchanged): aspects, top 3 actions with a
     linked quote each, and one plain sentence of overall sentiment. Unverified/rejected quotes never count."""
@@ -721,6 +787,10 @@ def business_value(slug: str) -> dict:
         actions.append({"category": k, "action": f"Look into {k.replace('_', ' / ')}",
                         "evidence": f"{v['negative']} complaint(s) in {len(texts)} reviews" + (" - low evidence, watch for more" if v["negative"] < 3 else ""),
                         "quote": q, "source_url": link(q)})
+    for x in actions:
+        x.setdefault("kind", "complaint")
+        x.setdefault("label", "Complaint")
+    actions = actions + _gap_actions(profile, a["aspects"], texts)  # every gap is listed; the to-do list takes the top 3
     aspects = {k: {"positive": v["positive"], "negative": v["negative"], "mentions": v["mentions"],
                    "status": "Doing well - no complaints found" if v["mentions"] and not v["negative"] else
                              ("No mentions yet" if not v["mentions"] else f"{v['negative']} complaint(s)")}
@@ -950,6 +1020,14 @@ def farm_view(slug: str) -> dict:
     return {**data, "links": links, "note": reddit.TAB_NOTE, "post_note": reddit.POST_NOTE,
             "cited": reddit.cited_check(data.get("posted", {}), _read(state_dir(slug) / "last_run.json", None)),
             "can_search": slug != EXAMPLE_SLUG and llm.has_key()}
+
+
+def farm_owner_sub(slug: str, subreddit: str) -> dict:
+    from . import reddit
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("Reddit drafts are for your own restaurant.")
+    reddit.owner_posts(slug, get_profile(slug), subreddit)
+    return farm_view(slug)
 
 
 def farm_find(slug: str) -> dict:

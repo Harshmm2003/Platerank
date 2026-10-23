@@ -776,6 +776,57 @@ _rd2._save("check_diner", {"at": "2026-10-23 14:00", "subreddits": [], "threads"
 check("live fix: Data farming with nothing verified says so plainly (no '0 ... 0 ... 0')",
       c.get("/api/restaurants/check_diner/results").json()["headlines"]["farm"].startswith("No Reddit conversations could be checked yet"))
 
+# ---- 1. business value: what verified reviews never mention -> "Gap: never mentioned" (not a complaint)
+c.put("/api/restaurants", json={"profile": {"name": "Cafe Athena Test", "cuisine": "Greek", "area": "Harbor Point",
+                                            "highlights": ["happy hour", "Greek-mythology cocktails"]}, "previous_slug": "cafe_athena_test"})
+gbv = c.get("/api/restaurants/cafe_athena_test/people-say").json()["business_value"]
+gaps = [a for a in gbv["actions"] if a.get("kind") == "gap"]
+n_rev = gbv["counts"]["verified_quotes"] + gbv["counts"]["owner_reviews"]
+check("gaps: complaints first, then one action per gap", [a["kind"] for a in gbv["actions"]] == sorted((a["kind"] for a in gbv["actions"]), key=lambda k: k != "complaint")
+      and {"drinks", "happy hour", "ambience"} <= {g["category"] for g in gaps},
+      [(a["kind"], a["category"]) for a in gbv["actions"]])
+check("gaps: drinks + happy hour (owner highlights no review mentions) come first", [g["category"] for g in gaps][:2] == ["drinks", "happy hour"], gaps)
+check("gaps: labelled 'Gap: never mentioned', evidence = '0 of N verified reviews mention ...', never 'complaint'",
+      all(g["label"] == "Gap: never mentioned" and g["evidence"] == f"0 of {n_rev} verified reviews mention {g['category']}"
+          and "complaint" not in (g["label"] + g["evidence"]).lower() for g in gaps), gaps)
+check("gaps: one concrete step that asks real guests (no fake reviews)", "Ask happy-hour guests to mention the cocktails" in gaps[0]["action"])
+tdg = c.get("/api/restaurants/cafe_athena_test/results").json()["todo"]
+check("gaps: top business-value actions reach the to-do list, labelled", any(t["title"].startswith("Gap - never mentioned (drinks)") for t in tdg)
+      and sum(t["id"].startswith("bv:") for t in tdg) <= 3, [t["title"][:50] for t in tdg])
+
+# ---- 2. data farming: a subreddit the owner adds -> 2 owner-voiced post drafts written by code (no AI call)
+llm.claude_call = lambda *a, **k: (_ for _ in ()).throw(AssertionError("owner posts must not call Claude"))
+check("owner sub: bad name -> plain 400", c.post("/api/restaurants/test_taverna/reddit/owner-sub", json={"subreddit": "not a sub!"}).status_code == 400)
+ow = c.post("/api/restaurants/test_taverna/reddit/owner-sub", json={"subreddit": "r/sandiego"}).json()
+od = [d for d in ow["drafts"] if d["key"].startswith("reddit_owner_sandiego_")]
+check("owner sub: 2 new-post drafts, no thread replies", len(od) == 2 and all(d["type"] == "post" for d in od), [d["key"] for d in ow["drafts"]])
+check("owner sub: owner's voice, from the profile (happy hour daily 3–6pm), nothing to confirm",
+      all(d["text"].startswith("Owner of Test Taverna here") and not d["flags"] for d in od) and "daily 3–6pm" in od[0]["text"], [d["text"] for d in od])
+check("owner sub: labelled 'Draft - you post it' + says the rules weren't checked", all(d["title"].startswith("Draft - you post it") and "couldn't check" in d["owner_note"] for d in od))
+check("owner sub: recorded as added by the owner in the ledger", any(e["subject"] == "subreddit (added by you)" and e["tier"] == "owner" for e in evidence.load("test_taverna")))
+c.post("/api/restaurants/test_taverna/approve", json={"key": od[0]["key"], "text": od[0]["text"]})
+ol = c.get("/api/restaurants/test_taverna/reddit").json()["links"][od[0]["key"]]
+check("owner sub: approved -> pre-filled submit link + text to copy", ol["href"].startswith("https://www.reddit.com/r/sandiego/submit?selftext=true&title=") and ol["copy"] == od[0]["text"], ol)
+llm.claude_call = real_call
+
+# ---- 3. re-check only some question types: kept apart, compared per type, honest label
+discovery.ASK["claude"] = lambda q, **kw: (("Try Recheck Cafe" if "happy hour" in q else "Try Other Place"), "fake", [], 0.0)
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+full_before = json.loads((tmp / "live" / "recheck_cafe" / "last_run.json").read_text(encoding="utf-8"))
+NOTE = "No website changes are live yet - this shows how re-checks work, not an improvement."
+jr = wait(c.post("/api/restaurants/recheck_cafe/run", json={"reuse": False, "platforms": ["claude"], "categories": ["happy-hour"], "note": NOTE}).json()["id"])
+n_hh = sum(q.category == "happy-hour" for q in generate_queries(pipeline.get_profile("recheck_cafe")))
+check("partial: only the chosen question types are asked", jr["state"] == "done" and jr["meta"]["questions"] == n_hh and jr["meta"]["categories"] == ["happy-hour"], (n_hh, jr["meta"]))
+check("partial: the full check on screen is NOT replaced", json.loads((tmp / "live" / "recheck_cafe" / "last_run.json").read_text(encoding="utf-8")) == full_before
+      and (tmp / "live" / "recheck_cafe" / "partial_run.json").exists())
+pc = c.get("/api/restaurants/recheck_cafe/results").json()["improve"]["compare"]
+check("partial: compared per question type with the first full check, with the honest label",
+      pc["partial"]["note"] == NOTE and [x["category"] for x in pc["partial"]["by_category"]] == ["happy-hour"]
+      and pc["partial"]["by_category"][0]["latest"] == 1.0 and pc["partial"]["by_category"][0]["first"] is not None, pc["partial"])
+check("partial: a partial check never counts as the 'latest' full check", pc.get("latest") is None or pc["latest"]["answers"] > n_hh, pc.get("latest"))
+discovery.ASK["claude"] = real_claude_ask
+del os.environ["ANTHROPIC_API_KEY"]
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")

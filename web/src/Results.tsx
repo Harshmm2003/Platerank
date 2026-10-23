@@ -516,6 +516,7 @@ function Improve({ r }: { r: R }) {
   return (
     <div className="space-y-5">
       <CompareCard r={r} />
+      <PartialCard r={r} />
       <Card>
         <h3 className="font-semibold">How often AI names you, check by check</h3>
         {h.length === 0 ? <p className="mt-2 text-sm text-stone-500">No checks saved yet.</p> : (
@@ -767,10 +768,10 @@ function PeopleSaySection({ slug, part = "both" }: { slug: string; part?: "quote
               </div>))}
           </div>
           <h4 className="mt-4 text-sm font-semibold">Top actions</h4>
-          {(bv.actions || []).length === 0 ? <p className="text-sm text-stone-500">No complaints strong enough to act on - doing well.</p> :
+          {(bv.actions || []).length === 0 ? <p className="text-sm text-stone-500">No complaints and nothing missing - doing well.</p> :
             <ol className="mt-1 space-y-2">{(bv.actions || []).map((x, i) => (
               <li key={i} className="rounded-lg bg-stone-50 p-2 text-sm">
-                <div><Badge kind="vfm">{x.category}</Badge> <span className="font-medium">{x.action}</span></div>
+                <div><Badge kind={x.kind === "gap" ? "neutral" : "vfm"}>{x.kind === "gap" ? `${x.label}: ${x.category}` : x.category}</Badge> <span className="font-medium">{x.action}</span></div>
                 <div className="mt-0.5 text-xs text-stone-500">{x.evidence}</div>
                 {x.quote && <div className="mt-0.5 text-xs">“{x.quote}” {x.source_url && <a className="text-sky-700" href={x.source_url} target="_blank" rel="noreferrer">{host(x.source_url)} ↗</a>}</div>}
               </li>))}</ol>}
@@ -858,6 +859,7 @@ function FarmTab({ r, reload }: { r: R; reload: () => void }) {
           and {d.counts.threads_verified} of {d.counts.threads_found} threads verified - the rest couldn't be checked and aren't used.</p>}
         {d.cited && <p className={cx("mt-2 rounded p-2 text-sm", d.cited.status === "cited" ? "bg-green-50 text-green-800" : "bg-stone-50 text-stone-600")}>{d.cited.note}</p>}
       </Card>
+      <OwnerSubCard slug={r.slug} onDone={(f) => setD(f)} />
       {(d.subreddits || []).length > 0 && (
         <Card>
           <h3 className="font-semibold">Subreddits and their rules</h3>
@@ -879,7 +881,7 @@ function FarmTab({ r, reload }: { r: R; reload: () => void }) {
             {x.type === "reply" && x.thread_url && <p className="text-xs text-stone-500">Thread: <a className="text-sky-700" href={x.thread_url} target="_blank" rel="noreferrer">{x.thread_title} ↗</a></p>}
             {x.type === "post" && <p className="text-xs text-stone-500">Title: {x.post_title}{x.flair_required ? " · pick a flair when posting" : ""}</p>}
             <Draft r={r} k={x.key} title={x.title} kind="text" text={x.text} reload={reloadAll} strict
-              note={[x.rule ? `Follows r/${x.subreddit}'s rule: “${x.rule}”` : "", x.flags.length ? `Marked for you to confirm (not in your facts): ${x.flags.join(", ")}` : ""].filter(Boolean).join(" ")}
+              note={[x.owner_note || "", x.rule ? `Follows r/${x.subreddit}'s rule: “${x.rule}”` : "", x.flags.length ? `Marked for you to confirm (not in your facts): ${x.flags.join(", ")}` : ""].filter(Boolean).join(" ")}
               open={d.links[x.key] ? { ...d.links[x.key], tip: d.post_note } : undefined} />
             {r.approvals[x.key] && (d.posted?.[x.key]
               ? <p className="text-xs text-green-700">Posted {d.posted[x.key].at}: <a className="text-sky-700" href={d.posted[x.key].url} target="_blank" rel="noreferrer">{d.posted[x.key].url}</a></p>
@@ -1049,6 +1051,76 @@ function TodoTab({ r, reload }: { r: R; reload: () => void }) {
         </ol>
       )}
       <p className="mt-3 text-xs text-stone-400">Ranked by the evidence: competitor gaps first, then what reviews say, then your website, creators and Reddit.</p>
+    </Card>
+  );
+}
+
+/** A subreddit the owner knows -> 2 owner-voiced post drafts written from the profile (no AI). */
+function OwnerSubCard({ slug, onDone }: { slug: string; onDone: (f: Farm) => void }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function add() {
+    setBusy(true); setError(null);
+    try { onDone(await api.post<Farm>(`/api/restaurants/${slug}/reddit/owner-sub`, { subreddit: name })); setName(""); } catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
+  return (
+    <Card>
+      <h3 className="font-semibold">Add a subreddit you know</h3>
+      <p className="text-sm text-stone-500">We draft 2 posts in your voice from your saved facts. You check that subreddit's rules and post them yourself.</p>
+      <div className="mt-2 flex gap-2">
+        <input className={inputCls} placeholder="e.g. sandiego" value={name} onChange={(e) => setName(e.target.value)} />
+        <Button small busy={busy} disabled={!name.trim()} onClick={add}>Draft 2 posts</Button>
+      </div>
+      <ErrorNote error={error} />
+    </Card>
+  );
+}
+
+/** Re-check only some question types (fresh answers), compared per type with the first full check. */
+function PartialCard({ r }: { r: R }) {
+  const m = r.improve.compare.partial;
+  const cats = (r.rank?.by_category || []).map((c) => c.category);
+  const [pick, setPick] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const liveChanges = Object.keys(r.approvals).some((k) => k.startsWith("pack_") || k.startsWith("reddit_"));
+  const note = liveChanges ? "Directional - AI answers vary run to run." : "No website changes are live yet - this shows how re-checks work, not an improvement.";
+  async function start() {
+    const chosen = Object.keys(pick).filter((k) => pick[k]);
+    if (!window.confirm(`Ask the ${chosen.join(" + ")} questions again with fresh answers? This uses Claude.`)) return;
+    setBusy(true); setError(null);
+    try {
+      const job = await api.post<{ id: string }>(`/api/restaurants/${r.slug}/run`, { runs: 1, reuse: false, web_search: true, platforms: ["claude"], categories: chosen, note });
+      for (;;) {
+        await new Promise((ok) => setTimeout(ok, 1500));
+        const j = await api.get<{ state: string; done: number; total: number; error: string | null }>(`/api/jobs/${job.id}`);
+        setProgress(`${j.done}/${j.total}`);
+        if (j.state !== "running") { if (j.error) setError(j.error); break; }
+      }
+      window.location.reload();
+    } catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
+  return (
+    <Card>
+      <h3 className="font-semibold">Re-check only some question types</h3>
+      {m && <div className="mt-2 rounded-lg bg-stone-50 p-3">
+        <p className="text-sm font-medium text-amber-800">{m.note}</p>
+        {m.reason ? <p className="text-sm text-stone-600">{m.reason}</p> : <table className="mt-2 w-full text-sm"><tbody>
+          <tr className="text-left text-xs text-stone-500"><th className="py-1 font-medium">Question type</th><th className="font-medium">First · {m.first_when}</th><th className="font-medium">Re-check · {m.when}</th></tr>
+          {m.by_category.map((c) => <tr key={c.category} className="border-t border-stone-100"><td className="py-1">{c.category.replace(/-/g, " ")}</td><td>{pct(c.first)}</td><td className="font-semibold">{pct(c.latest)}</td></tr>)}
+        </tbody></table>}
+      </div>}
+      <div className="mt-3 flex flex-wrap gap-2">{cats.map((c) => (
+        <label key={c} className="flex items-center gap-1 rounded-full border border-stone-200 px-2 py-0.5 text-sm">
+          <input type="checkbox" className="accent-brand-600" checked={!!pick[c]} onChange={(e) => setPick({ ...pick, [c]: e.target.checked })} />{c.replace(/-/g, " ")}
+        </label>))}</div>
+      <div className="mt-3"><Button small busy={busy} disabled={!Object.values(pick).some(Boolean) || r.is_sample} onClick={start}>Re-check these (fresh answers)</Button></div>
+      {busy && <SlowBar label={`Asking those questions again… ${progress}`} />}
+      <ErrorNote error={error} />
     </Card>
   );
 }
