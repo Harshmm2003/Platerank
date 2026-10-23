@@ -157,3 +157,13 @@ export type SiteNow = { at: string; url: string; ok: boolean; note?: string; tit
   pieces: Record<string, { text: string; found: boolean; evidence: Evidence | null }> };
 export type Housekeeping = { site_now: SiteNow | null; reminders: Record<string, number>; pdf_keys: string[];
   social: { hashtags: string[]; keywords: string[]; checklist: string[]; note: string } };
+
+export type RedditDraft = { key: string; type: "reply" | "post"; subreddit: string; title: string; text: string; flags: string[];
+  thread_url?: string; thread_title?: string; post_title?: string; rule?: string | null; flair_required?: boolean | null };
+export type Farm = { at?: string; note: string; post_note: string; can_search: boolean;
+  subreddits?: { name: string; url: string; evidence: Evidence; rules_url?: string; rule_quote?: string | null; rule_evidence?: Evidence | null;
+    self_promotion: string; weekly_thread?: string | null; flair_required?: boolean | null }[];
+  threads?: { subreddit: string; title: string; url: string; date?: string | null; asks_for?: string; evidence: Evidence }[];
+  counts?: Record<string, number>; drafts?: RedditDraft[]; posted?: Record<string, { url: string; at: string }>;
+  links: Record<string, { href: string; copy: string; kind: "post" | "reply" }>;
+  cited: { status: string; note: string } | null };

@@ -381,6 +381,32 @@ def piece_pdf(slug: str, key: str):
                     headers={"Content-Disposition": f'attachment; filename="{slug}-{key}.pdf"'})
 
 
+@app.get("/api/restaurants/{slug}/reddit")
+def reddit_view(slug: str):
+    _profile_or_404(slug)
+    return pipeline.farm_view(slug)
+
+
+@app.post("/api/restaurants/{slug}/reddit/find")
+def reddit_find(slug: str):
+    """Claude + web search for subreddits (+ rules) and live threads, every item checked; then owner-voiced drafts."""
+    _profile_or_404(slug)
+    return pipeline.farm_find(slug)
+
+
+class PostedIn(BaseModel):
+    key: str
+    url: str
+
+
+@app.post("/api/restaurants/{slug}/reddit/posted")
+def reddit_posted(slug: str, body: PostedIn):
+    _profile_or_404(slug)
+    from platerank import reddit
+    reddit.mark_posted(slug, body.key, body.url)
+    return pipeline.farm_view(slug)
+
+
 # ------------------------------------------------------------------ frontend
 if (WEB / "assets").exists():
     app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")

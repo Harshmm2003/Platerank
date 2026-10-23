@@ -252,8 +252,8 @@ def _mailtos(approvals: dict, restaurant: str) -> dict:
 
 # ------------------------------------------------------------------ owner data
 def save_approval(slug: str, key: str, text: str) -> dict:
-    if key.startswith("pack_") and (not text.strip() or content_gen.CONFIRM in text):
-        raise ValueError("Fill in or delete every [OWNER TO CONFIRM] part first - website text is approved only when every fact is confirmed.")
+    if key.startswith(("pack_", "reddit_")) and (not text.strip() or content_gen.CONFIRM in text):
+        raise ValueError("Fill in or delete every [OWNER TO CONFIRM] part first - this text is approved only when every fact is confirmed.")
     path = state_dir(slug) / "approved.json"
     data = _read(path, {})
     data[key] = {"at": time.strftime("%Y-%m-%d %H:%M"), "text": text}
@@ -633,7 +633,10 @@ def _ld_blocks(raw_html: str) -> list[dict]:
 
 def _around(text: str, word: str, n: int = 500) -> str | None:
     i = text.lower().find(word)
-    return text[max(0, i - 40): i + n].strip() if i >= 0 else None
+    if i < 0:
+        return None
+    start = text.rfind(". ", 0, max(0, i - 1))  # start at a sentence (never mid-word)
+    return text[start + 2 if start >= 0 and i - start < 200 else i: i + n].strip()
 
 
 def read_site_now(slug: str) -> dict:
@@ -756,7 +759,7 @@ def social_hygiene(profile: dict, lost_categories: list[str], site_now: dict | N
     nick = (profile.get("area_nicknames") or [None])[0]
     place = nick or area
     hl = " ".join(profile.get("highlights") or []).lower()
-    tags = [_tag(plain(area)), _tag(nick) if nick else None, _tag(plain(cuisine), "Food", plain(city)), _tag(plain(city), "Eats")]
+    tags = [_tag(plain(area)), _tag(plain(cuisine), "Food", plain(city)), _tag(plain(city), "Eats")]  # a bare nickname (#PB) is too vague
     tags += [_tag(plain(a), plain(city)) for a in profile.get("cuisine_alternates") or []]
     if "happy hour" in hl: tags.append(_tag(place, "HappyHour"))
     if re.search(r"cocktail|bar\b|wine|beer", hl): tags.append(_tag(place, "Cocktails"))
@@ -801,6 +804,31 @@ def _housekeeping(slug: str, profile: dict, lost_categories: list[str]) -> dict:
     sites = sorted({x.get("site") for x in pub.get("items", []) if (x.get("evidence") or {}).get("status") == "verified" and x.get("site")})
     return {"site_now": now, "reminders": _read(state_dir(slug) / "reminders.json", {}),
             "social": social_hygiene(profile, lost_categories, now, sites), "pdf_keys": list(PDF_PIECES)}
+
+
+# ------------------------------------------------------------------ data farming: Reddit (owner-voiced, owner posts)
+def farm_view(slug: str) -> dict:
+    from . import reddit
+    data = reddit.load(slug)
+    approvals = _read(state_dir(slug) / "approved.json", {})
+    links = {}
+    for d in data.get("drafts", []):
+        ap = approvals.get(d["key"])
+        if not ap:
+            continue  # "Open on Reddit" only after approval
+        links[d["key"]] = ({"href": reddit.submit_link(d["subreddit"], d["post_title"], ap["text"]), "copy": ap["text"], "kind": "post"}
+                           if d["type"] == "post" else {"href": d["thread_url"], "copy": ap["text"], "kind": "reply"})
+    return {**data, "links": links, "note": reddit.TAB_NOTE, "post_note": reddit.POST_NOTE,
+            "cited": reddit.cited_check(data.get("posted", {}), _read(state_dir(slug) / "last_run.json", None)),
+            "can_search": slug != EXAMPLE_SLUG and llm.has_key()}
+
+
+def farm_find(slug: str) -> dict:
+    from . import reddit
+    if slug == EXAMPLE_SLUG:
+        raise ValueError("Reddit search is for your own restaurant - the sample is fictional.")
+    reddit.find(slug, get_profile(slug))
+    return farm_view(slug)
 
 
 def results(slug: str) -> dict | None:

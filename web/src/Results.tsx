@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AiQuote, api, ApiError, Evidence, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
+import { AiQuote, api, ApiError, Evidence, Farm, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
 import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
@@ -9,6 +9,7 @@ const TABS = [
   ["change", "3", "What should I change?"],
   ["make", "4", "Make the changes"],
   ["improve", "5", "Did it improve?"],
+  ["farm", "6", "Data farming"],
 ] as const;
 
 export default function Results({ slug, tab }: { slug: string; tab: string }) {
@@ -49,7 +50,7 @@ export default function Results({ slug, tab }: { slug: string; tab: string }) {
         tab === "why" ? <Why r={r} reload={load} /> :
         tab === "change" ? <Change r={r} reload={load} /> :
         tab === "make" ? <Make r={r} reload={load} /> :
-        tab === "improve" ? <Improve r={r} /> : <Rank r={r} />}
+        tab === "improve" ? <Improve r={r} /> : tab === "farm" ? <FarmTab r={r} reload={load} /> : <Rank r={r} />}
       <SourcesPanel slug={slug} />
     </div>
   );
@@ -85,7 +86,8 @@ function BeforeFirstCheck({ r, tab, reload }: { r: R; tab: string; reload: () =>
         </div>
       </div>
       <TabNav slug={r.slug} tab={active} reminders={activeReminders(r)} />
-      {active === "make" ? <Make r={r} reload={reload} /> : active === "change" ? <PeopleSaySection slug={r.slug} /> : (
+      {active === "make" ? <Make r={r} reload={reload} /> : active === "change" ? <PeopleSaySection slug={r.slug} /> :
+        active === "farm" ? <FarmTab r={r} reload={reload} /> : (
         <Card>
           <p className="text-stone-700">Run a check first - this answer comes from asking AI assistants the questions your customers ask.</p>
           <div className="mt-3"><Button onClick={() => go(`/r/${r.slug}/run`)}>Run the first check</Button></div>
@@ -388,8 +390,8 @@ function ReviewsForm({ r, reload }: { r: R; reload: () => void }) {
 }
 
 // ---------------------------------------------------------------- 4
-function Draft({ r, k, title, kind, text: initial, reload, strict, note, file }: { r: R; k: string; title: string; kind: "text" | "code" | "json";
-  text: string; reload: () => void; strict?: boolean; note?: string; file?: string }) {
+function Draft({ r, k, title, kind, text: initial, reload, strict, note, file, open }: { r: R; k: string; title: string; kind: "text" | "code" | "json";
+  text: string; reload: () => void; strict?: boolean; note?: string; file?: string; open?: { href: string; copy: string; kind: string; tip: string } }) {
   const approved = r.approvals[k];
   const hk = useContext(HK);
   const [text, setText] = useState(approved?.text || initial);
@@ -445,6 +447,10 @@ function Draft({ r, k, title, kind, text: initial, reload, strict, note, file }:
           setBusy(true); setError(await downloadUrl(`/api/restaurants/${r.slug}/pdf/${k}`, `${r.slug}-${k}.pdf`)); setBusy(false); }}>⬇ Download PDF</Button>}
         <Button kind="ghost" small onClick={() => copy(text)}>Copy</Button>
         <Button kind="ghost" small disabled={!text.trim()} onClick={() => download(file || `${k}.txt`, text)}>Download</Button>
+        {k.startsWith("reddit_") && (approved && open
+          ? <Button small title={open.tip} onClick={() => { copy(open.copy); window.open(open.href, "_blank", "noopener"); }}>
+              {open.kind === "post" ? "Open on Reddit (text copied)" : "Copy reply + open thread"}</Button>
+          : <Button small kind="secondary" disabled title="Approve the draft first - then you post it yourself on Reddit">Open on Reddit</Button>)}
         {k.startsWith("outreach") && (r.mailto?.[k]
           ? <a href={r.mailto[k]} className="inline-flex items-center rounded-lg bg-brand-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-brand-700">✉ Open in email</a>
           : <Button small kind="secondary" disabled title="Approve the draft first - then it opens in your email app for you to send">✉ Open in email</Button>)}
@@ -820,5 +826,83 @@ function SocialCard({ s }: { s: Housekeeping["social"] }) {
       <p className="mt-2 text-xs text-stone-500">Search keywords to use in bios, captions and video titles: {s.keywords.join(" · ")}</p>
       <ul className="mt-3 space-y-1 text-sm">{s.checklist.map((c) => <li key={c}>☐ {c}</li>)}</ul>
     </Card>
+  );
+}
+
+/** Data farming: Reddit agent. Every subreddit, rule and thread is checked; the owner posts, never PlateRank. */
+function FarmTab({ r, reload }: { r: R; reload: () => void }) {
+  const [d, setD] = useState<Farm | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [posted, setPosted] = useState<Record<string, string>>({});
+  const load = useCallback(() => api.get<Farm>(`/api/restaurants/${r.slug}/reddit`).then(setD).catch((e) => setError(e.message)), [r.slug]);
+  useEffect(() => { load(); }, [load]);
+  const reloadAll = () => { reload(); load(); };
+  async function find() {
+    if (d?.at && !window.confirm("Search Reddit again? This replaces the saved subreddits, threads and drafts (posted links are kept).")) return;
+    setBusy(true); setError(null);
+    try { setD(await api.post<Farm>(`/api/restaurants/${r.slug}/reddit/find`)); } catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
+  async function markPosted(key: string) {
+    setError(null);
+    try { setD(await api.post<Farm>(`/api/restaurants/${r.slug}/reddit/posted`, { key, url: posted[key] || "" })); } catch (e) { setError((e as Error).message); }
+  }
+  const hk = r.make?.housekeeping;
+  if (!d) return <ErrorNote error={error} />;
+  return (
+    <HK.Provider value={hk ? { reminders: hk.reminders, showHidden: false, now: null, pdf_keys: [] } : null}>
+    <div className="space-y-5">
+      <div className="rounded-lg border border-brand-500 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">{d.note}</div>
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Reddit: where locals ask where to eat</h3>
+            <p className="text-sm text-stone-500">Finds your city and neighbourhood subreddits (with their rules) and live threads asking for what you serve,
+              then drafts replies in your voice. Only ✓ verified subreddits, rules and threads are used.</p>
+          </div>
+          <Button small busy={busy} disabled={!d.can_search} title={d.can_search ? "" : "Needs a Claude key in .env"} onClick={find}>
+            {d.at ? "Search again" : "Find subreddits & conversations"}</Button>
+        </div>
+        {busy && <SlowBar label="Claude is finding subreddits, their rules and recent threads, then we check each one… (30–90 seconds)" />}
+        <ErrorNote error={error} />
+        {d.at && d.counts && <p className="mt-2 text-xs text-stone-500">Searched {d.at}: {d.counts.subreddits_verified} of {d.counts.subreddits_found} subreddits
+          and {d.counts.threads_verified} of {d.counts.threads_found} threads verified - the rest couldn't be checked and aren't used.</p>}
+        {d.cited && <p className={cx("mt-2 rounded p-2 text-sm", d.cited.status === "cited" ? "bg-green-50 text-green-800" : "bg-stone-50 text-stone-600")}>{d.cited.note}</p>}
+      </Card>
+      {(d.subreddits || []).length > 0 && (
+        <Card>
+          <h3 className="font-semibold">Subreddits and their rules</h3>
+          <ul className="mt-2 space-y-2 text-sm">{(d.subreddits || []).map((s) => (
+            <li key={s.name} className="border-t border-stone-100 pt-2">
+              <div className="flex flex-wrap items-center gap-2"><a className="font-medium text-sky-700" href={s.url} target="_blank" rel="noreferrer">r/{s.name}</a>
+                <EvidenceBadge ev={s.evidence} />
+                <Badge kind={s.self_promotion === "allowed" ? "LIVE" : "neutral"}>self-promotion: {s.self_promotion}</Badge>
+                {s.weekly_thread && <Badge kind="neutral">weekly thread: {s.weekly_thread}</Badge>}
+                {s.flair_required && <Badge kind="neutral">flair required</Badge>}</div>
+              {s.rule_quote ? <div className="mt-1 text-xs text-stone-600">Rule: “{s.rule_quote}” <EvidenceBadge ev={s.rule_evidence} /></div>
+                : <div className="mt-1 text-xs text-stone-400">Rule not verified - treat as “no self-promotion”{s.rules_url && <> · <a className="text-sky-700" href={s.rules_url} target="_blank" rel="noreferrer">read the rules ↗</a></>}</div>}
+            </li>))}</ul>
+        </Card>
+      )}
+      {(d.drafts || []).length > 0 ? (
+        <div className="grid gap-5 lg:grid-cols-2">{(d.drafts || []).map((x) => (
+          <div key={x.key} className="space-y-2">
+            {x.type === "reply" && x.thread_url && <p className="text-xs text-stone-500">Thread: <a className="text-sky-700" href={x.thread_url} target="_blank" rel="noreferrer">{x.thread_title} ↗</a></p>}
+            {x.type === "post" && <p className="text-xs text-stone-500">Title: {x.post_title}{x.flair_required ? " · pick a flair when posting" : ""}</p>}
+            <Draft r={r} k={x.key} title={x.title} kind="text" text={x.text} reload={reloadAll} strict
+              note={[x.rule ? `Follows r/${x.subreddit}'s rule: “${x.rule}”` : "", x.flags.length ? `Marked for you to confirm (not in your facts): ${x.flags.join(", ")}` : ""].filter(Boolean).join(" ")}
+              open={d.links[x.key] ? { ...d.links[x.key], tip: d.post_note } : undefined} />
+            {r.approvals[x.key] && (d.posted?.[x.key]
+              ? <p className="text-xs text-green-700">Posted {d.posted[x.key].at}: <a className="text-sky-700" href={d.posted[x.key].url} target="_blank" rel="noreferrer">{d.posted[x.key].url}</a></p>
+              : <div className="flex gap-2"><input className={cx(inputCls, "text-sm")} placeholder="After posting, paste the link to your post here"
+                  value={posted[x.key] || ""} onChange={(e) => setPosted({ ...posted, [x.key]: e.target.value })} />
+                  <Button small kind="secondary" disabled={!posted[x.key]} onClick={() => markPosted(x.key)}>Mark as posted</Button></div>)}
+          </div>))}
+        </div>
+      ) : d.at && <Card><p className="text-sm text-stone-500">No verified threads or open subreddits to draft for yet. Try again later - threads come and go.</p></Card>}
+      <p className="text-xs text-stone-400">{d.post_note} PlateRank never posts by itself.</p>
+    </div>
+    </HK.Provider>
   );
 }

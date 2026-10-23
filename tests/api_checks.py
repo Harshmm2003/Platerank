@@ -604,11 +604,77 @@ check("pdf: local page printed as text, not HTML", "Fish & chips" in lt and "<p>
 c.post("/api/restaurants/test_taverna/approve", json={"key": "pack_menu_copy", "text": "Moussaka - layers"})
 check("pdf: menu only if we hold dishes", c.get("/api/restaurants/test_taverna/pdf/pack_menu_copy").status_code == 400)
 soc = pipeline.social_hygiene(pipeline.get_profile("test_taverna"), ["late-night", "date-night", "happy-hour"])
-check("social: hashtags from the profile + lost question types", {"#HarborPoint", "#HP", "#GreekFoodSpringfield", "#HPHappyHour", "#GlutenFreeSpringfield",
+check("social: hashtags from the profile + lost question types", {"#HarborPoint", "#GreekFoodSpringfield", "#HPHappyHour", "#GlutenFreeSpringfield",
       "#HPDateNight", "#SpringfieldCatering", "#SpringfieldPrivateEvents"} <= set(soc["hashtags"]), soc["hashtags"])
-check("social: no hashtag for something the profile doesn't offer (late-night)", not any("Late" in t for t in soc["hashtags"]), soc["hashtags"])
+check("social: no hashtag for something the profile doesn't offer (late-night), no bare nickname", not any("Late" in t for t in soc["hashtags"]) and "#HP" not in soc["hashtags"], soc["hashtags"])
 check("social: checklist uses the saved facts", any("12 Ocean Ave" in x for x in soc["checklist"]) and any(HOURS in x for x in soc["checklist"]), soc["checklist"])
 check("social: keywords from the profile", "Greek restaurant Harbor Point" in soc["keywords"] and "happy hour HP" in soc["keywords"], soc["keywords"])
+
+# ---- data farming: Reddit agent (fake Claude + fake pages); owner-voiced, verified-only, owner posts
+FAKE_PAGES.update({
+    "https://www.reddit.com/r/sandiego/": FakePage("<html><title>r/sandiego</title><body>r/sandiego - San Diego's community" + FILLER + "</body></html>"),
+    "https://www.reddit.com/r/sandiego/about/rules/": FakePage("<html><body>Rules: 4. Self-promotion is allowed on weekends with the Business flair." + FILLER + "</body></html>"),
+    "https://www.reddit.com/r/pacificbeach/": FakePage("<html><body>Welcome to r/pacificbeach" + FILLER + "</body></html>"),
+    "https://www.reddit.com/r/pacificbeach/about/rules/": FakePage("blocked", status=403),
+    "https://www.reddit.com/r/fakesub/": FakePage("<html><body>This community is about cats." + FILLER + "</body></html>"),
+    "https://www.reddit.com/r/sandiego/comments/abc/best_greek/": FakePage("<html><body><h1>Best Greek food near Garnet Ave?</h1>" + FILLER + "</body></html>"),
+    "https://www.reddit.com/r/sandiego/comments/zzz/made_up/": FakePage("<html><body><h1>Something else entirely</h1>" + FILLER + "</body></html>"),
+})
+SUBS = [{"name": "sandiego", "url": "https://www.reddit.com/r/sandiego/", "rules_url": "https://www.reddit.com/r/sandiego/about/rules/",
+         "self_promotion": "allowed", "flair_required": True, "rule_quote": "Self-promotion is allowed on weekends with the Business flair."},
+        {"name": "pacificbeach", "url": "https://www.reddit.com/r/pacificbeach/", "rules_url": "https://www.reddit.com/r/pacificbeach/about/rules/",
+         "self_promotion": "allowed", "rule_quote": "Local businesses may post once a month."},
+        {"name": "fakesub", "url": "https://www.reddit.com/r/fakesub/", "self_promotion": "allowed"}]
+THREADS = [{"subreddit": "sandiego", "title": "Best Greek food near Garnet Ave?", "url": "https://www.reddit.com/r/sandiego/comments/abc/best_greek/", "date": "2026-10-01"},
+           {"subreddit": "sandiego", "title": "Where to get gyros at 3am", "url": "https://www.reddit.com/r/sandiego/comments/zzz/made_up/"},
+           {"subreddit": "x", "title": "Not reddit", "url": "https://example.com/forum/1"}]
+DRAFTS = {"replies": [{"text": "We do great gyros - call (619) 555-0101."}],
+          "posts": [{"title": "Owner of Recheck Cafe here - ask me anything about our happy hour", "text": "Owner of Recheck Cafe here - we're a Greek spot in Harbor Point."}]}
+farm_calls = []
+def fake_farm_call(prompt, **kw):
+    farm_calls.append(prompt[:40])
+    body = SUBS if "Reddit communities" in prompt else THREADS if "Reddit threads" in prompt else DRAFTS
+    return llm.ClaudeResult(text=json.dumps(body), model="fake")
+llm.claude_call = fake_farm_call
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+fv = c.post("/api/restaurants/recheck_cafe/reddit/find").json()
+subs = {s["name"]: s for s in fv["subreddits"]}
+check("reddit: only verified subreddits kept (fake one dropped)", set(subs) == {"sandiego", "pacificbeach"} and fv["counts"]["subreddits_found"] == 3, fv["counts"])
+check("reddit: rule verified -> its permission counts; rule unverified -> 'unknown'", subs["sandiego"]["self_promotion"] == "allowed"
+      and subs["pacificbeach"]["self_promotion"] == "unknown" and subs["pacificbeach"]["rule_quote"] is None, subs["pacificbeach"])
+check("reddit: only verified threads (made-up title + non-reddit link dropped)", [t["title"] for t in fv["threads"]] == ["Best Greek food near Garnet Ave?"], fv["threads"])
+kinds = {d["type"]: d for d in fv["drafts"]}
+check("reddit: one reply per thread, a new post only where the verified rule allows", sorted(d["type"] for d in fv["drafts"]) == ["post", "reply"]
+      and kinds["post"]["subreddit"] == "sandiego", [(d["type"], d["subreddit"]) for d in fv["drafts"]])
+check("reddit: drafts always start as the owner", all(d["text"].startswith("Owner of Recheck Cafe here") for d in fv["drafts"]), [d["text"][:40] for d in fv["drafts"]])
+check("reddit: invented facts wrapped for the owner", "[OWNER TO CONFIRM: (619) 555-0101]" in kinds["reply"]["text"], kinds["reply"]["text"])
+check("reddit: the post carries the subreddit's rule", kinds["post"]["rule"].startswith("Self-promotion is allowed"))
+check("reddit: no 'Open on Reddit' before approval", fv["links"] == {})
+bad = c.post("/api/restaurants/recheck_cafe/approve", json={"key": kinds["reply"]["key"], "text": kinds["reply"]["text"]})
+check("reddit: can't approve while [OWNER TO CONFIRM] remains", bad.status_code == 400)
+c.post("/api/restaurants/recheck_cafe/approve", json={"key": kinds["reply"]["key"], "text": "Owner of Recheck Cafe here - we're a Greek spot in Harbor Point."})
+c.post("/api/restaurants/recheck_cafe/approve", json={"key": kinds["post"]["key"], "text": kinds["post"]["text"]})
+lk = c.get("/api/restaurants/recheck_cafe/reddit").json()["links"]
+check("reddit: approved post -> pre-filled submit link + text to copy",
+      lk[kinds["post"]["key"]]["href"].startswith("https://www.reddit.com/r/sandiego/submit?selftext=true&title=Owner%20of%20Recheck%20Cafe")
+      and "&text=Owner%20of%20Recheck" in lk[kinds["post"]["key"]]["href"] and lk[kinds["post"]["key"]]["copy"] == kinds["post"]["text"], lk)
+check("reddit: approved reply -> copy reply + open the thread", lk[kinds["reply"]["key"]] == {"href": "https://www.reddit.com/r/sandiego/comments/abc/best_greek/",
+      "copy": "Owner of Recheck Cafe here - we're a Greek spot in Harbor Point.", "kind": "reply"}, lk)
+check("reddit: posted link must be a reddit post", c.post("/api/restaurants/recheck_cafe/reddit/posted", json={"key": kinds["post"]["key"], "url": "https://example.com"}).status_code == 400)
+pv = c.post("/api/restaurants/recheck_cafe/reddit/posted", json={"key": kinds["post"]["key"], "url": "https://www.reddit.com/r/sandiego/comments/new1/owner_here/"}).json()
+check("reddit: posted saved; flag waits for the next re-check", pv["posted"][kinds["post"]["key"]]["url"].endswith("/owner_here/") and pv["cited"]["status"] == "waiting", pv["cited"])
+discovery.ASK["claude"] = lambda q, **kw: ("Try Recheck Cafe", "fake", [{"url": "https://www.reddit.com/r/sandiego/comments/abc/", "title": "t"}], 0.0)
+time.sleep(0.01)
+pipeline.run("recheck_cafe", platforms=["claude"], reuse=False)
+cv = c.get("/api/restaurants/recheck_cafe/reddit").json()["cited"]
+check("reddit: next re-check flags reddit.com among the AI's sources", cv["status"] == "cited" and "directional" in cv["note"], cv)
+discovery.ASK["claude"] = real_claude_ask
+check("reddit: tab note says posts come from the owner", "never fake reviews" in c.get("/api/restaurants/recheck_cafe/reddit").json()["note"])
+check("reddit: every subreddit/rule/thread is in the evidence ledger", sum(e["subject"].startswith("r/") or e["subject"] == "subreddit"
+      for e in evidence.load("recheck_cafe")) >= 6)
+check("reddit: sample can't search", c.post("/api/restaurants/example/reddit/find").status_code == 400)
+llm.claude_call = real_call
+del os.environ["ANTHROPIC_API_KEY"]
 
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
