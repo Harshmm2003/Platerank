@@ -18,6 +18,9 @@ Status of every phase + the to-do list: see HANDOFF.md.
 - **Always run `python check.py` and show the result before asking to commit.** Add checks in `tests/` for every
   new feature; checks must never make paid or network calls (fake them - see `tests/api_checks.py`).
 - Ready-made prompts for each next phase: `PROMPTS.md`.
+- **Standing rule for hackathon day (Oct 23, 2026) only:** after every feature, once `python check.py` passes,
+  commit AND push to `origin frontend-v2` without asking. Never push to `main`, never force-push, never commit `.env`.
+  Still ask before paid API calls, installs and deleting data. From Oct 24 on, rule 9 applies again in full.
 
 ## Pipeline (do not change the order or rename modules)
 Setup -> Discovery -> Analysis -> 3 Action tracks (Fix Pack / Creators / Value-for-Money) -> owner approval -> Measurement.
@@ -60,7 +63,8 @@ suggest competitors and draft text.
 6. Don't claim a same-day ranking improvement — measurement is directional; the claim is the repeated re-test loop.
 7. Instagram is reach, not AI citation; YouTube, listicles, Reddit and reviews are the AI-cited surfaces.
 8. Never certify a dish as safe for an allergy.
-9. Ask the user before: installs, paid API usage, deleting data, git commits/pushes.
+9. Ask the user before: installs, paid API usage, deleting data, git commits/pushes
+   (exception on Oct 23, 2026: commits/pushes to `frontend-v2` after a green `python check.py` - see "Run it").
 10. Speak plainly to the user (they are new to Claude Code); short summaries.
 
 ## Gotchas

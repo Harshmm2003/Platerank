@@ -1,0 +1,36 @@
+{
+ "name": "Café Athena",
+ "website": "https://cafeathena.com",
+ "cuisine": "Greek",
+ "cuisine_alternates": [
+  "Mediterranean"
+ ],
+ "area": "Pacific Beach",
+ "neighbourhood": "Pacific Beach",
+ "area_nicknames": [
+  "PB"
+ ],
+ "city": "San Diego",
+ "state": "CA",
+ "city_id": "San Diego|CA",
+ "address": "1846 Garnet Ave, San Diego, CA 92109",
+ "hours": "Sun-Thu 11am-9pm, Fri-Sat 11am-9:30pm; happy hour daily 3-6pm",
+ "price_level": null,
+ "aliases": [
+  "Cafe Athena"
+ ],
+ "highlights": [
+  "gluten-free",
+  "happy hour",
+  "cocktails",
+  "private events",
+  "catering",
+  "vegan"
+ ],
+ "signature_terms": [],
+ "anchor_item": "",
+ "menu": {},
+ "competitors": [],
+ "competitor_menus": {},
+ "facts_note": "Owner-confirmed via the hackathon brief (Oct 23, 2026): address, website, hours, happy hour, dietary options, full bar, catering, group dining, private events, open since 1990."
+}
