@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AiQuote, api, ApiError, CreatorsView, Evidence, Farm, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
+import { AgentReview, AiQuote, api, ApiError, CreatorsView, Evidence, Farm, Housekeeping, PeopleSay, pct, PackPiece, Results as R } from "./api";
 import { Badge, BadgeKind, Bar, Button, Card, ErrorNote, EvidenceBadge, Field, inputCls, More, ROUTE_LABEL, SlowBar, SourceLinks, Stat, copy, cx, download } from "./ui";
 import { go } from "./App";
 
@@ -824,6 +824,7 @@ function FarmTab({ r, reload }: { r: R; reload: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [posted, setPosted] = useState<Record<string, string>>({});
+  const [useEdit, setUseEdit] = useState<Record<string, string>>({});
   const load = useCallback(() => api.get<Farm>(`/api/restaurants/${r.slug}/reddit`).then(setD).catch((e) => setError(e.message)), [r.slug]);
   useEffect(() => { load(); }, [load]);
   const reloadAll = () => { reload(); load(); };
@@ -880,7 +881,8 @@ function FarmTab({ r, reload }: { r: R; reload: () => void }) {
           <div key={x.key} className="space-y-2">
             {x.type === "reply" && x.thread_url && <p className="text-xs text-stone-500">Thread: <a className="text-sky-700" href={x.thread_url} target="_blank" rel="noreferrer">{x.thread_title} ↗</a></p>}
             {x.type === "post" && <p className="text-xs text-stone-500">Title: {x.post_title}{x.flair_required ? " · pick a flair when posting" : ""}</p>}
-            <Draft r={r} k={x.key} title={x.title} kind="text" text={x.text} reload={reloadAll} strict
+            <AgentReviewPanel slug={r.slug} draftKey={x.key} onUseEdit={(t) => setUseEdit({ ...useEdit, [x.key]: t })} />
+            <Draft key={`${x.key}-${useEdit[x.key] ? "edit" : "orig"}`} r={r} k={x.key} title={x.title} kind="text" text={useEdit[x.key] || x.text} reload={reloadAll} strict
               note={[x.owner_note || "", x.rule ? `Follows r/${x.subreddit}'s rule: “${x.rule}”` : "", x.flags.length ? `Marked for you to confirm (not in your facts): ${x.flags.join(", ")}` : ""].filter(Boolean).join(" ")}
               open={d.links[x.key] ? { ...d.links[x.key], tip: d.post_note } : undefined} />
             {r.approvals[x.key] && (d.posted?.[x.key]
@@ -1122,5 +1124,62 @@ function PartialCard({ r }: { r: R }) {
       {busy && <SlowBar label={`Asking those questions again… ${progress}`} />}
       <ErrorNote error={error} />
     </Card>
+  );
+}
+
+const VERDICT_KIND: Record<string, BadgeKind> = { "Ready for you to post": "LIVE", "Post after edits": "DEMO", "Don't post": "FAILED" };
+
+/** Promoter vs Skeptic on one draft. The verdict and summary are computed by code; the owner decides. */
+function AgentReviewPanel({ slug, draftKey, onUseEdit }: { slug: string; draftKey: string; onUseEdit: (text: string) => void }) {
+  const [rv, setRv] = useState<AgentReview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run(fresh = false) {
+    setBusy(true); setError(null);
+    try { setRv(await api.post<AgentReview>(`/api/restaurants/${slug}/drafts/${encodeURIComponent(draftKey)}/agent-review?fresh=${fresh}`)); }
+    catch (e) { setError((e as Error).message); }
+    setBusy(false);
+  }
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-semibold">Two-agent review</span>
+        <div className="flex gap-2">
+          <Button small kind="secondary" busy={busy} onClick={() => run(false)}>{rv ? "Show review" : "Review with 2 agents"}</Button>
+          {rv && <Button small kind="ghost" busy={busy} onClick={() => run(true)} title="Ignore the saved review and ask both agents again">Review again</Button>}
+        </div>
+      </div>
+      {busy && <SlowBar label="A Promoter and a Skeptic are debating this draft… (10–40 seconds)" />}
+      <ErrorNote error={error} />
+      {rv && <div className="mt-2 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge kind={VERDICT_KIND[rv.verdict] || "neutral"}>{rv.verdict}</Badge>
+          <span className="text-xs text-stone-500">{rv.label}</span>
+          {rv.cached && <span className="text-xs text-stone-400">Same answer as last time (saved)</span>}
+        </div>
+        <p className="text-sm text-stone-700">{rv.summary}</p>
+        {rv.transcript.length > 0 && <ul className="space-y-1.5">{rv.transcript.map((m, i) => (
+          <li key={i} className={cx("rounded-lg p-2 text-sm", m.agent === "Promoter" ? "bg-sky-50" : "bg-amber-50")}>
+            <span className="text-xs font-semibold">{m.agent} · round {m.round}</span>
+            <div>{m.text}</div>
+            {m.note && <div className="text-xs text-stone-500">{m.note}</div>}
+            {m.citations.length > 0 && <div className="text-xs text-stone-400">cites {m.citations.join(", ")}</div>}
+          </li>))}</ul>}
+        {rv.checklist.length > 0 && <table className="w-full text-sm"><tbody>
+          {rv.checklist.map((c) => (
+            <tr key={c.rule} className="border-t border-stone-100 align-top">
+              <td className="py-1 pr-2 font-medium">{c.rule}<span className="ml-1 text-xs text-stone-400">{c.level}</span></td>
+              <td className={cx("py-1 pr-2 font-semibold", c.result === "pass" ? "text-green-700" : c.result === "fail" ? "text-red-700" : "text-stone-400")}>{c.result}</td>
+              <td className="py-1 pr-2">{c.reason}</td>
+              <td className="py-1 text-xs text-stone-400">{c.cite}</td>
+            </tr>))}
+        </tbody></table>}
+        {rv.suggested_edit && <div className="rounded-lg bg-stone-50 p-2 text-sm">
+          <div className="text-xs font-semibold text-stone-600">Suggested edit</div>
+          <div className="whitespace-pre-wrap">{rv.suggested_edit}</div>
+          <div className="mt-2"><Button small onClick={() => onUseEdit(rv.suggested_edit!)}>Use suggested edit</Button></div>
+        </div>}
+      </div>}
+    </div>
   );
 }

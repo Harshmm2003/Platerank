@@ -39,6 +39,7 @@ Setup -> Discovery -> Analysis -> 3 Action tracks (Fix Pack / Creators / Value-f
 | `llm.py` | all | The ONE place Claude is called: models, web search / web fetch tools, cost per call, plain-English errors |
 | `evidence.py` | all | Evidence ledger: every web-sourced fact/quote is re-fetched from its cited page and marked verified / unverified / rejected |
 | `reddit.py` | Action (Data farming) | Reddit agent: verified subreddits + rules + live threads, owner-voiced reply/post drafts; the owner posts (never PlateRank) |
+| `review_agents.py` | Action (owner approval) | Promoter vs Skeptic review of post drafts on one code-built context packet; step-0 fact check, verdict + summary computed by code, cached by hash |
 | `places.py` | Setup | OpenStreetMap restaurant search (dropdown), place details, radius search for competitors; Claude web facts (price level, rating) with sources |
 | `pipeline.py` | all | The pipeline as functions for the web app: run Discovery, build the results bundle per owner question, approvals, reviews/listings saving |
 | `api.py` | UI backend | FastAPI routes over `pipeline`/`places`; plain-English errors; serves `web/dist` |

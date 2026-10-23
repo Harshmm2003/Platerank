@@ -178,3 +178,8 @@ export type RealCreator = { handle: string; name: string; platform: string; url:
   why: string; brief: { concept_title: string; hook: string }; brief_text: string; outreach: string; outreach_key: string; saved: boolean };
 export type CreatorsView = { at: string | null; creators: RealCreator[]; found: number; dropped_no_url: number; rejected: number;
   lost_categories: string[]; can_search: boolean };
+
+export type AgentReview = { status: "ok" | "failed"; label: string; verdict: string; summary: string; cached: boolean; suggested_edit: string | null;
+  transcript: { agent: string; round: number; text: string; citations: string[]; note?: string }[];
+  checklist: { rule: string; level: "hard" | "soft"; result: string; reason: string; cite: string; by: string }[];
+  rejected_citations: { agent: string; round: number; id: string }[] };

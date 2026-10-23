@@ -832,6 +832,73 @@ check("partial: a partial check never counts as the 'latest' full check", pc.get
 discovery.ASK["claude"] = real_claude_ask
 del os.environ["ANTHROPIC_API_KEY"]
 
+# ---- two-agent review of drafts (scripted fake Claude: no network, no money)
+from platerank import review_agents as ra
+queue, agent_calls = [], []
+def scripted_call(prompt, **kw):
+    agent_calls.append(kw["tools"][0]["name"])
+    assert kw.get("tool_choice") == {"type": "auto"} and kw["tools"][0]["strict"] is True and "temperature" not in kw, kw
+    item = queue.pop(0)
+    return llm.ClaudeResult(text="", model="fake", tool_inputs=[] if item is None else [{"name": kw["tools"][0]["name"], "input": item}])
+ALL_PASS = {"checks": [{"rule": r, "result": "pass", "reason": "Fine.", "cite": r} for r in ra.RULE_IDS]}
+def fails(*rules):
+    return {"checks": [{"rule": r, "result": "fail" if r in rules else "pass", "reason": f"{r} problem." if r in rules else "Fine.", "cite": r} for r in ra.RULE_IDS]}
+A_OK = {"argument": "Clear owner post with real facts.", "citations": ["E1", "fact:name"], "edited_text": "", "concede": False}
+llm.claude_call = scripted_call
+key_owner = "reddit_owner_sandiego_1"   # Test Taverna: owner-added subreddit, rules NOT verified
+key_ruled = kinds["post"]["key"]        # Recheck Cafe: post whose subreddit rule WAS verified
+def review(slug, key, fresh=True):
+    agent_calls.clear()
+    return c.post(f"/api/restaurants/{slug}/drafts/{key}/agent-review?fresh={str(fresh).lower()}").json()
+
+check("agents: schema validation (all 7 rules, pass/fail only, right types)", ra._valid_skeptic(ALL_PASS) and not ra._valid_skeptic({"checks": ALL_PASS["checks"][:6]})
+      and not ra._valid_skeptic({"checks": [{**ALL_PASS["checks"][0], "result": "maybe"}] + ALL_PASS["checks"][1:]})
+      and ra._valid_promoter(A_OK) and not ra._valid_promoter({**A_OK, "concede": "no"}))
+queue[:] = [None, None]
+rf = review("recheck_cafe", key_ruled)
+check("agents: invalid reply -> one retry -> FAILED, nothing invented, not cached", rf["status"] == "failed" and rf["verdict"] == "Review failed - decide yourself"
+      and agent_calls == ["promoter_reply", "promoter_reply"] and rf["checklist"] == [], rf)
+queue[:] = [{**A_OK, "citations": ["E1", "E999", "fact:name", "fact:hours", "made-up"]}, ALL_PASS]  # this cafe has no hours saved
+rp = review("recheck_cafe", key_ruled)
+check("agents: a cited ID that isn't in the packet is dropped + listed as rejected", [x["id"] for x in rp["rejected_citations"]] == ["E999", "fact:hours", "made-up"]
+      and rp["transcript"][0]["citations"] == ["E1", "fact:name"] and "E999" in rp["summary"], rp["rejected_citations"])
+check("agents: all pass -> 'Ready for you to post' (computed by code), early stop after round 1", rp["verdict"] == "Ready for you to post"
+      and agent_calls == ["promoter_reply", "skeptic_checks"] and {m["round"] for m in rp["transcript"]} == {1}, (rp["verdict"], agent_calls))
+queue[:] = [A_OK, ALL_PASS]
+rs = review("test_taverna", key_owner)
+check("agents: only a soft fail (rules unverified, R7) -> 'Post after edits'", rs["verdict"] == "Post after edits"
+      and [c_["rule"] for c_ in rs["checklist"] if c_["result"] == "fail"] == ["R7"], [(c_["rule"], c_["result"]) for c_ in rs["checklist"]])
+queue[:] = [A_OK, fails("R5", "R6"), {**A_OK, "concede": True}, fails("R5")]
+rh = review("recheck_cafe", key_ruled)
+check("agents: a hard-rule fail -> 'Don't post'; max 2 rounds = 4 calls", rh["verdict"] == "Don't post" and len(agent_calls) == 4
+      and max(m["round"] for m in rh["transcript"]) == 2, (rh["verdict"], agent_calls))
+check("agents: verdict rules in code", ra.verdict_of([{"rule": "R2", "result": "fail"}]) == "Don't post" and ra.verdict_of([{"rule": "R6", "result": "fail"}]) == "Post after edits"
+      and ra.verdict_of([{"rule": "R1", "result": "pass"}]) == "Ready for you to post")
+check("agents: summary is the code template", rh["summary"].startswith("Verdict: Don't post.") and "Failed: R5 (R5 problem.)" in rh["summary"], rh["summary"])
+good_edit = "Owner of Recheck Cafe here - we're a Greek spot in Harbor Point. Happy to answer questions."
+bad_edit = "Owner of Recheck Cafe here - the best Greek in town, call (619) 555-0101."
+queue[:] = [{**A_OK, "edited_text": bad_edit}, fails("R6"), {**A_OK, "edited_text": good_edit}, ALL_PASS]
+re_ = review("recheck_cafe", key_ruled)
+check("agents: an edit that fails the fact check is dropped; the clean edit is suggested", re_["suggested_edit"] == good_edit
+      and "dropped" in re_["transcript"][0]["note"] and re_["verdict"] == "Ready for you to post", re_["transcript"])
+c.post("/api/restaurants/recheck_cafe/approve", json={"key": key_ruled, "text": "Best gyros in San Diego - come by!"})
+queue[:] = []
+r0 = review("recheck_cafe", key_ruled)
+check("agents: step 0 fact check fails a hard rule -> 'Don't post' with NO Claude call", r0["verdict"] == "Don't post" and agent_calls == []
+      and {c_["rule"] for c_ in r0["checklist"] if c_["result"] == "fail"} >= {"R1", "R5"} and "Stopped by the fact check" in r0["summary"], r0["summary"])
+c.post("/api/restaurants/recheck_cafe/approve", json={"key": key_ruled, "text": kinds["post"]["text"]})
+queue[:] = [A_OK, ALL_PASS]
+first = review("recheck_cafe", key_ruled, fresh=False)
+second = review("recheck_cafe", key_ruled, fresh=False)
+strip = lambda x: {k: v for k, v in x.items() if k not in ("cached", "cost")}
+check("agents: same inputs -> the saved review word for word, no call, $0", second["cached"] is True and agent_calls == [] and strip(second) == strip(first)
+      and second["cost"] == 0.0, (second["cached"], agent_calls))
+queue[:] = [A_OK, fails("R6"), A_OK, fails("R6")]
+fr = review("recheck_cafe", key_ruled, fresh=True)
+check("agents: 'fresh' bypasses the cache", fr["cached"] is False and len(agent_calls) >= 2 and fr["verdict"] == "Post after edits", (fr["verdict"], agent_calls))
+check("agents: labelled for the owner", fr["label"] == "Two AI agents reviewed this. You decide.")
+llm.claude_call = real_call
+
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re
 money = [f"{f.name}: {m.group(0)}" for f in Path("web/src").rglob("*.tsx")

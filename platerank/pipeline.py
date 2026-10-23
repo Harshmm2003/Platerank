@@ -1022,6 +1022,26 @@ def farm_view(slug: str) -> dict:
             "can_search": slug != EXAMPLE_SLUG and llm.has_key()}
 
 
+def _draft_for_review(slug: str, key: str) -> dict:
+    """A Reddit draft or creator message, as the owner currently has it (approved text if they edited/approved it)."""
+    from . import reddit
+    approved = _read(state_dir(slug) / "approved.json", {}).get(key)
+    for d in reddit.load(slug).get("drafts", []):
+        if d["key"] == key:
+            return {"key": key, "title": d.get("post_title") or d.get("thread_title") or "", "type": d["type"],
+                    "text": approved["text"] if approved else d["text"], "target": f"r/{d['subreddit']}", "rules_verified": bool(d.get("rule"))}
+    for c in creators_view(slug)["creators"] if slug != EXAMPLE_SLUG else []:
+        if c["outreach_key"] == key:
+            return {"key": key, "title": f"Message to {c['name']}", "type": "message", "text": approved["text"] if approved else c["outreach"],
+                    "target": f"{c['name']} ({c['platform']})", "rules_verified": True}
+    raise ValueError("That draft isn't there any more - search again.")
+
+
+def agent_review(slug: str, key: str, fresh: bool = False) -> dict:
+    from . import review_agents
+    return review_agents.review(slug, get_profile(slug), _draft_for_review(slug, key), fresh=fresh)
+
+
 def farm_owner_sub(slug: str, subreddit: str) -> dict:
     from . import reddit
     if slug == EXAMPLE_SLUG:
