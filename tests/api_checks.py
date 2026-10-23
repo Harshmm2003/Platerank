@@ -802,6 +802,11 @@ od = [d for d in ow["drafts"] if d["key"].startswith("reddit_owner_sandiego_")]
 check("owner sub: 2 new-post drafts, no thread replies", len(od) == 2 and all(d["type"] == "post" for d in od), [d["key"] for d in ow["drafts"]])
 check("owner sub: owner's voice, from the profile (happy hour daily 3–6pm), nothing to confirm",
       all(d["text"].startswith("Owner of Test Taverna here") and not d["flags"] for d in od) and "daily 3–6pm" in od[0]["text"], [d["text"] for d in od])
+c.put("/api/restaurants", json={"profile": {"name": "Test Taverna", "cuisine": "Greek", "area": "Harbor Point",
+                                            "highlights": ["cocktails", "Greek-mythology cocktails", "happy hour"]}, "previous_slug": "test_taverna"})
+od2 = [d for d in c.post("/api/restaurants/test_taverna/reddit/owner-sub", json={"subreddit": "sandiego"}).json()["drafts"] if d["key"].startswith("reddit_owner_sandiego_")]
+check("owner sub: the most specific fact is used (Greek-mythology cocktails), street without house number in the title",
+      "Greek-mythology cocktails" in od2[1]["text"] and od2[0]["post_title"].endswith("on Ocean Ave") and od2[0]["text"].count("happy hour") == 1, [d["post_title"] for d in od2])
 check("owner sub: labelled 'Draft - you post it' + says the rules weren't checked", all(d["title"].startswith("Draft - you post it") and "couldn't check" in d["owner_note"] for d in od))
 check("owner sub: recorded as added by the owner in the ledger", any(e["subject"] == "subreddit (added by you)" and e["tier"] == "owner" for e in evidence.load("test_taverna")))
 c.post("/api/restaurants/test_taverna/approve", json={"key": od[0]["key"], "text": od[0]["text"]})

@@ -1,5 +1,18 @@
 [
  {
+  "id": "0b12825294a6",
+  "kind": "subreddit",
+  "subject": "subreddit (added by you)",
+  "text": "sandiego",
+  "source_url": "https://www.reddit.com/r/sandiego/",
+  "page_title": "",
+  "found_by": "owner",
+  "status": "verified",
+  "tier": "owner",
+  "check_note": "entered by the owner",
+  "retrieved_at": "2026-10-23 14:04"
+ },
+ {
   "id": "1a9de1b813c8",
   "kind": "profile",
   "subject": "creator (Instagram)",
@@ -187,18 +200,6 @@
   "status": "verified",
   "tier": "page fetch",
   "check_note": "found on the cited page"
- },
- {
-  "id": "0b12825294a6",
-  "kind": "subreddit",
-  "subject": "subreddit",
-  "text": "sandiego",
-  "source_url": "https://www.reddit.com/r/sandiego/",
-  "page_title": "Reddit",
-  "found_by": "Claude web search",
-  "retrieved_at": "2026-10-23 13:53",
-  "status": "unverified",
-  "check_note": "the page needs a browser to read - open the link to check"
  },
  {
   "id": "9ab7a9dbff23",

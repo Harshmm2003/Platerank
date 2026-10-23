@@ -174,13 +174,14 @@ def owner_posts(slug: str, profile: dict, subreddit: str) -> dict:
     hl = [h.lower() for h in p.get("highlights") or []]
     hh = re.search(r"happy hour[:\s]+([^;,\n]+)", p.get("hours") or "", re.I)
     where = f"{p.get('address') or p['area']}" + (f" in {p.get('neighbourhood')}" if p.get("neighbourhood") and p["neighbourhood"] not in (p.get("address") or "") else "")
-    cocktails = next((h for h in p.get("highlights") or [] if "cocktail" in h.lower()), None)
+    cocktails = max((h for h in p.get("highlights") or [] if "cocktail" in h.lower()), key=len, default=None)  # most specific wins
     posts = []
     if hh:
-        posts.append({"title": f"{owner} - happy hour {hh.group(1).strip()} on {where.split(',')[0]}",
+        street = re.sub(r"^\d+[A-Za-z-]*\s+", "", where.split(",")[0])  # "1846 Garnet Ave" -> "Garnet Ave"
+        posts.append({"title": f"{owner} - happy hour {hh.group(1).strip()} on {street}",
                       "text": f"{owner}. Our happy hour runs {hh.group(1).strip()} at {where}." +
                               (f" We have a full bar{' with ' + cocktails if cocktails and cocktails.lower() != 'cocktails' else ' with cocktails'}." if any('bar' in h or 'cocktail' in h for h in hl) else "") +
-                              f" Hours: {p.get('hours')}. Happy to answer questions here."})
+                              f" Open {(p.get('hours') or '').split(';')[0].strip()}. Happy to answer questions here."})
     if cocktails or any("bar" in h for h in hl):
         posts.append({"title": f"{owner} - {cocktails or 'cocktails'} and {p['cuisine']} food, ask me anything",
                       "text": f"{owner}. We serve {p['cuisine']} food" + (f" (also described as {', '.join(p.get('cuisine_alternates') or [])})" if p.get("cuisine_alternates") else "") +
