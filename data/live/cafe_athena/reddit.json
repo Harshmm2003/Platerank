@@ -1,6 +1,21 @@
 {
- "at": "2026-10-23 13:54",
+ "at": "2026-10-23 14:29",
  "subreddits": [
+  {
+   "name": "greekfood",
+   "url": "https://www.reddit.com/r/greekfood/",
+   "added_by_owner": true,
+   "evidence": {
+    "status": "verified",
+    "tier": "owner",
+    "check_note": "added by you"
+   },
+   "rules_url": "https://www.reddit.com/r/greekfood/about/rules/",
+   "rule_quote": null,
+   "self_promotion": "unknown - read the rules",
+   "weekly_thread": null,
+   "flair_required": null
+  },
   {
    "name": "sandiego",
    "url": "https://www.reddit.com/r/sandiego/",
@@ -25,6 +40,30 @@
   "threads_verified": 0
  },
  "drafts": [
+  {
+   "key": "reddit_owner_greekfood_1",
+   "type": "post",
+   "subreddit": "greekfood",
+   "post_title": "Owner of Café Athena here - happy hour daily 3–6pm on Garnet Ave",
+   "title": "Draft - you post it: r/greekfood post 1",
+   "text": "Owner of Café Athena here. Our happy hour runs daily 3–6pm at 1846 Garnet Ave, San Diego, CA 92109 in Pacific Beach. We have a full bar with Greek-mythology cocktails. Open Sun–Thu 11am–9pm, Fri–Sat 11am–9:30pm. Happy to answer questions here.",
+   "flags": [],
+   "rule": null,
+   "owner_note": "Added by you - we couldn't check this subreddit's rules. Read them before posting.",
+   "flair_required": null
+  },
+  {
+   "key": "reddit_owner_greekfood_2",
+   "type": "post",
+   "subreddit": "greekfood",
+   "post_title": "Owner of Café Athena here - Greek-mythology cocktails and Greek food, ask me anything",
+   "title": "Draft - you post it: r/greekfood post 2",
+   "text": "Owner of Café Athena here. We serve Greek food (also described as Mediterranean) at 1846 Garnet Ave, San Diego, CA 92109 in Pacific Beach, open since 1990. The bar serves Greek-mythology cocktails. Happy hour: daily 3–6pm. We also have gluten-free and vegan options. Ask me anything about the menu.",
+   "flags": [],
+   "rule": null,
+   "owner_note": "Added by you - we couldn't check this subreddit's rules. Read them before posting.",
+   "flair_required": null
+  },
   {
    "key": "reddit_owner_sandiego_1",
    "type": "post",
@@ -51,5 +90,5 @@
   }
  ],
  "posted": {},
- "cost_usd": 0.8414
+ "cost_usd": 0.6997
 }

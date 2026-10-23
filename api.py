@@ -466,10 +466,20 @@ if (WEB / "assets").exists():
     app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")
 
 
+UNKNOWN_API = "That action isn't available - restart PlateRank (Ctrl+C, then python run.py) and refresh the page."
+
+
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], include_in_schema=False)
+def unknown_api(path: str):
+    """Registered after every real route: an /api call nothing answers (e.g. a server started before a new
+    feature existed) gets a plain sentence - never a raw 405 from the page catch-all below."""
+    raise HTTPException(404, UNKNOWN_API)
+
+
 @app.get("/{path:path}", include_in_schema=False)
 def spa(path: str):
     if path.startswith("api/"):
-        raise HTTPException(404, "Unknown API route.")
+        raise HTTPException(404, UNKNOWN_API)
     f = WEB / path
     if path and f.is_file():
         return FileResponse(f)

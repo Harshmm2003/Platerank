@@ -773,8 +773,9 @@ check("live fix: thread search suggests site:reddit.com searches; creators searc
 
 from platerank import reddit as _rd2
 _rd2._save("check_diner", {"at": "2026-10-23 14:00", "subreddits": [], "threads": [], "drafts": [], "posted": {}})
-check("live fix: Data farming with nothing verified says so plainly (no '0 ... 0 ... 0')",
-      c.get("/api/restaurants/check_diner/results").json()["headlines"]["farm"].startswith("No Reddit conversations could be checked yet"))
+hl_farm = c.get("/api/restaurants/check_diner/results").json()["headlines"]["farm"]
+check("farm headline: nothing found -> counts from the ledger, nothing drafted", hl_farm == "No Reddit search yet; nothing drafted yet."
+      or hl_farm.startswith("0 live Reddit threads found and 0 of 0 subreddits verified"), hl_farm)
 
 # ---- 1. business value: what verified reviews never mention -> "Gap: never mentioned" (not a complaint)
 c.put("/api/restaurants", json={"profile": {"name": "Cafe Athena Test", "cuisine": "Greek", "area": "Harbor Point",
@@ -901,6 +902,44 @@ fr = review("recheck_cafe", key_ruled, fresh=True)
 check("agents: 'fresh' bypasses the cache", fr["cached"] is False and len(agent_calls) >= 2 and fr["verdict"] == "Post after edits", (fr["verdict"], agent_calls))
 check("agents: labelled for the owner", fr["label"] == "Two AI agents reviewed this. You decide.")
 llm.claude_call = real_call
+
+# ---- 405 bug (Oct 23): add-a-subreddit input forms, plain 404 for unknown /api calls, headline = ledger counts
+for form in ("r/greekfood", "greekfood", "/r/greekfood", "reddit.com/r/greekfood", "https://www.reddit.com/r/greekfood/", "https://old.reddit.com/r/greekfood/top/?t=week"):
+    res = c.post("/api/restaurants/test_taverna/reddit/owner-sub", json={"subreddit": form})
+    keys = [d["key"] for d in res.json().get("drafts", [])] if res.status_code == 200 else []
+    check(f"add subreddit: '{form}' -> r/greekfood + 2 post drafts", res.status_code == 200 and {"reddit_owner_greekfood_1", "reddit_owner_greekfood_2"} <= set(keys)
+          and "greekfood" in [s["name"] for s in res.json()["subreddits"]], (res.status_code, keys))
+tv = c.get("/api/restaurants/test_taverna/reddit").json()
+check("add subreddit: adding another keeps the first (sandiego + greekfood)", {"sandiego", "greekfood"} <= {s["name"] for s in tv["subreddits"]}
+      and sum(k["key"].startswith("reddit_owner_sandiego_") for k in tv["drafts"]) == 2, [s["name"] for s in tv["subreddits"]])
+for method in ("post", "put", "delete", "get"):
+    bad = getattr(c, method)("/api/restaurants/test_taverna/no-such-action")
+    check(f"unknown /api {method.upper()} -> plain-English 404, not 405", bad.status_code == 404 and bad.json()["detail"].startswith("That action isn't available - restart PlateRank"), (bad.status_code, bad.text[:80]))
+wrong = c.get("/api/restaurants/test_taverna/reddit/owner-sub")
+check("a real route called with the wrong method -> the same plain 404", wrong.status_code == 404 and "restart PlateRank" in wrong.json()["detail"], (wrong.status_code, wrong.text[:80]))
+ts = Path("web/src/api.ts").read_text(encoding="utf-8")
+check("frontend: 404/405 without a detail -> the same plain sentence", "res.status === 404 || res.status === 405" and "restart PlateRank (Ctrl+C, then python run.py)" in ts)
+tvh = c.get("/api/restaurants/test_taverna/results").json()["headlines"]["farm"]
+check("farm headline: never searched -> says so, counts the posts", tvh == f"No Reddit search yet; {sum(d['type'] == 'post' for d in tv['drafts'])} posts drafted for you to post.", tvh)
+check("farm headline: singular/plural", pipeline.farm_headline({"counts": {"threads_verified": 1, "subreddits_verified": 0, "subreddits_found": 1}, "drafts": [{"type": "post"}]})
+      == "1 live Reddit thread found and 0 of 1 subreddit verified; 1 post drafted for you to post.")
+# a new Reddit search must not throw away what the owner added
+nofacts = c.post("/api/restaurants/recheck_cafe/reddit/owner-sub", json={"subreddit": "greekfood"})
+check("add subreddit: no happy hour / bar saved -> plain message, nothing half-saved", nofacts.status_code == 400
+      and "enough saved facts" in nofacts.json()["detail"] and "greekfood" not in [s["name"] for s in c.get("/api/restaurants/recheck_cafe/reddit").json().get("subreddits", [])])
+llm.claude_call = fake_farm_call
+os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
+again = c.post("/api/restaurants/test_taverna/reddit/find").json()
+check("search again keeps owner-added subreddits + their post drafts", "greekfood" in [s["name"] for s in again["subreddits"]]
+      and sum(d["key"].startswith("reddit_owner_greekfood_") for d in again["drafts"]) == 2, [d["key"] for d in again["drafts"]])
+rch = c.get("/api/restaurants/test_taverna/results").json()["headlines"]["farm"]
+cnt, n_posts, n_rep = again["counts"], sum(d["type"] == "post" for d in again["drafts"]), sum(d["type"] == "reply" for d in again["drafts"])
+check("farm headline: counts match the ledger, plural-correct, posts and replies named right",
+      rch == f"{cnt['threads_verified']} live Reddit thread{'s' if cnt['threads_verified'] != 1 else ''} found and {cnt['subreddits_verified']} of "
+             f"{cnt['subreddits_found']} subreddit{'s' if cnt['subreddits_found'] != 1 else ''} verified; {n_posts} post{'s' if n_posts != 1 else ''} and "
+             f"{n_rep} repl{'ies' if n_rep != 1 else 'y'} drafted for you to post.", rch)
+llm.claude_call = real_call
+del os.environ["ANTHROPIC_API_KEY"]
 
 # ---- no money shown on screen (cost tracking stays in the backend + tools/check_live.py)
 import re as _re

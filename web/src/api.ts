@@ -16,7 +16,13 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
     throw new ApiError("Can't reach PlateRank. Is the terminal running `python run.py` still open?");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.detail || `Request failed (${res.status}).`);
+  if (!res.ok) {
+    const raw = typeof data.detail === "string" ? data.detail : "";
+    // a missing route (old server still running) or raw HTTP text -> one plain sentence
+    if ((res.status === 404 || res.status === 405) && (!raw || /^(not found|method not allowed)$/i.test(raw)))
+      throw new ApiError("That action isn't available - restart PlateRank (Ctrl+C, then python run.py) and refresh the page.");
+    throw new ApiError(raw || "Something went wrong - try again.");
+  }
   return data as T;
 }
 

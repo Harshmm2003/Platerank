@@ -538,15 +538,8 @@ def overview(slug: str, out: dict) -> dict:
     # 4 business value
     tabs["business"] = bv.get("sentiment") if bv.get("ready") else bv.get("reason", "")
     # 5 data farming
-    if fv.get("drafts") and not fv.get("threads"):
-        tabs["farm"] = (f"{len(fv['drafts'])} post drafts ready for r/{', r/'.join(sorted({d['subreddit'] for d in fv['drafts']}))} - "
-                        "you post them yourself. No live threads could be checked yet.")
-    elif fv.get("at") and not fv.get("threads") and not fv.get("subreddits"):
-        tabs["farm"] = ("No Reddit conversations could be checked yet - Reddit keeps its pages from automated checks, "
-                        "so nothing unverified is used. Try again later.")
-    elif fv.get("at"):
-        tabs["farm"] = (f"{len(fv.get('threads', []))} live Reddit conversations and {len(fv.get('subreddits', []))} subreddits verified; "
-                        f"{len(fv.get('drafts', []))} replies ready for you to post.")
+    if fv.get("at") or fv.get("drafts"):
+        tabs["farm"] = farm_headline(fv)
     else:
         tabs["farm"] = "Not searched yet - find where locals ask where to eat on Reddit."
     # 7 did it improve
@@ -1020,6 +1013,21 @@ def farm_view(slug: str) -> dict:
     return {**data, "links": links, "note": reddit.TAB_NOTE, "post_note": reddit.POST_NOTE,
             "cited": reddit.cited_check(data.get("posted", {}), _read(state_dir(slug) / "last_run.json", None)),
             "can_search": slug != EXAMPLE_SLUG and llm.has_key()}
+
+
+def _n(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def farm_headline(fv: dict) -> str:
+    """Counts from the evidence ledger (what the Reddit search could verify) + the drafts on file."""
+    c = fv.get("counts") or {}
+    posts = sum(d["type"] == "post" for d in fv.get("drafts", []))
+    replies = sum(d["type"] == "reply" for d in fv.get("drafts", []))
+    drafted = " and ".join(x for x in (_n(posts, "post") if posts else "", _n(replies, "reply").replace("replys", "replies") if replies else "") if x)
+    head = (f"{_n(c.get('threads_verified', 0), 'live Reddit thread')} found and {c.get('subreddits_verified', 0)} of "
+            f"{_n(c.get('subreddits_found', 0), 'subreddit')} verified" if c else "No Reddit search yet")
+    return head + (f"; {drafted} drafted for you to post." if drafted else "; nothing drafted yet.")
 
 
 def _draft_for_review(slug: str, key: str) -> dict:

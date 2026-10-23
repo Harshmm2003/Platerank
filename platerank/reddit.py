@@ -40,7 +40,10 @@ TAB_NOTE = "Posts come from you, as the owner - never fake reviews."
 
 
 def _sub_name(x: str) -> str:
-    return re.sub(r"^(?:https?://(?:www\.|old\.)?reddit\.com)?/?r/", "", str(x or "").strip()).strip("/").split("/")[0]
+    """'r/greekfood', 'greekfood', '/r/greekfood', 'reddit.com/r/greekfood', 'https://www.reddit.com/r/greekfood/top' -> 'greekfood'."""
+    s = re.sub(r"^(?:https?://)?(?:www\.|old\.|new\.|m\.)?reddit\.com", "", str(x or "").strip(), flags=re.I)
+    s = re.sub(r"^/?r/", "", s.strip(), flags=re.I)
+    return s.strip("/").split("/")[0].split("?")[0].strip()
 
 
 def path(slug: str):
@@ -104,8 +107,11 @@ def find(slug: str, profile: dict) -> dict:
     threads = [{"subreddit": _sub_name(t.get("subreddit")), "title": t["title"], "url": t["url"], "date": t.get("date"),
                 "asks_for": t.get("asks_for"), "evidence": evidence.badge(rec)} for t, rec in zip(threads_raw, recs) if rec["status"] == evidence.VERIFIED]
     counts = {"subreddits_found": len(subs_raw), "subreddits_verified": len(subs), "threads_found": len(threads_raw), "threads_verified": len(threads)}
-    data = {"at": time.strftime("%Y-%m-%d %H:%M"), "subreddits": subs, "threads": threads, "counts": counts,
-            "drafts": draft(profile, subs, threads), "posted": old.get("posted", {}),
+    # subreddits the owner added and the posts drafted for them survive a new search
+    mine = [s for s in old.get("subreddits", []) if s.get("added_by_owner") and s["name"] not in {x["name"] for x in subs}]
+    mine_drafts = [d for d in old.get("drafts", []) if d["key"].startswith("reddit_owner_")]
+    data = {"at": time.strftime("%Y-%m-%d %H:%M"), "subreddits": subs + mine, "threads": threads, "counts": counts,
+            "drafts": draft(profile, subs, threads) + mine_drafts, "posted": old.get("posted", {}),
             "cost_usd": round(r1.cost_usd + r2.cost_usd, 4)}
     _save(slug, data)
     return data
@@ -168,8 +174,6 @@ def owner_posts(slug: str, profile: dict, subreddit: str) -> dict:
     name = _sub_name(subreddit)
     if not re.fullmatch(r"[A-Za-z0-9_]{2,21}", name or ""):
         raise ValueError("Type the subreddit's name, e.g. sandiego (or r/sandiego).")
-    evidence.record_and_verify(slug, [{"kind": "subreddit", "text": name, "source_url": f"https://www.reddit.com/r/{name}/",
-                                       "subject": "subreddit (added by you)", "found_by": "owner"}])
     p, owner = profile, f"Owner of {profile['name']} here"
     hl = [h.lower() for h in p.get("highlights") or []]
     hh = re.search(r"happy hour[:\s]+([^;,\n]+)", p.get("hours") or "", re.I)
@@ -190,7 +194,11 @@ def owner_posts(slug: str, profile: dict, subreddit: str) -> dict:
                               (f" Happy hour: {hh.group(1).strip()}." if hh else "") +
                               (" We also have " + " and ".join(h for h in p.get("highlights") or [] if re.search(r"gluten|vegan|vegetarian", h, re.I)) + " options." if any(re.search(r"gluten|vegan|vegetarian", h) for h in hl) else "") +
                               " Ask me anything about the menu."})
+    if not posts:
+        raise ValueError("There aren't enough saved facts to write a post yet (happy hour or bar) - add them in Setup, then try again.")
     facts = content_gen.pack_facts(p)
+    evidence.record_and_verify(slug, [{"kind": "subreddit", "text": name, "source_url": f"https://www.reddit.com/r/{name}/",
+                                       "subject": "subreddit (added by you)", "found_by": "owner"}])
     data = load(slug)
     subs = [s for s in data.get("subreddits", []) if s["name"] != name] + [{"name": name, "url": f"https://www.reddit.com/r/{name}/", "added_by_owner": True,
              "evidence": {"status": "verified", "tier": "owner", "check_note": "added by you"}, "rules_url": f"https://www.reddit.com/r/{name}/about/rules/",
